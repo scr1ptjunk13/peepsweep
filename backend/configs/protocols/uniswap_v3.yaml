@@ -1,0 +1,84 @@
+protocol:
+  name: "uniswap_v3"
+  type: "AMM"
+  version: "3.0"
+  chains:
+    1:  # Ethereum
+      factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+      position_manager: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
+      multicall: "0x5ba1e12693dc8f9c48aad8770482f4739beed696"
+      quoter: "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6"
+    137: # Polygon
+      factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+      position_manager: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
+      multicall: "0x5ba1e12693dc8f9c48aad8770482f4739beed696"
+      quoter: "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6"
+    42161: # Arbitrum
+      factory: "0x1F98431c8aD98523631AE4a59f267346ea31F984"
+      position_manager: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
+      multicall: "0x5ba1e12693dc8f9c48aad8770482f4739beed696"
+      quoter: "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6"
+
+position_detection:
+  method: "nft_ownership"
+  contract_function:
+    name: "balanceOf"
+    inputs: ["address"]
+    outputs: ["uint256"]
+  
+  token_enumeration:
+    function: "tokenOfOwnerByIndex"
+    inputs: ["address", "uint256"]
+    outputs: ["uint256"]
+
+position_details:
+  function: "positions"
+  inputs: ["uint256"]  # tokenId
+  outputs:
+    - name: "nonce"
+      type: "uint96"
+    - name: "operator"
+      type: "address"
+    - name: "token0"
+      type: "address"
+    - name: "token1"
+      type: "address"
+    - name: "fee"
+      type: "uint24"
+    - name: "tickLower"
+      type: "int24"
+    - name: "tickUpper"
+      type: "int24"
+    - name: "liquidity"
+      type: "uint128"
+    - name: "feeGrowthInside0LastX128"
+      type: "uint256"
+    - name: "feeGrowthInside1LastX128"
+      type: "uint256"
+    - name: "tokensOwed0"
+      type: "uint128"
+    - name: "tokensOwed1"
+      type: "uint128"
+
+position_type: "nft"
+risk_calculation:
+  il_formula: "uniswap_v3_concentrated"
+  volatility_window: 168  # hours
+  rebalancing_frequency: 24  # hours
+  risk_factors:
+    - "impermanent_loss"
+    - "fee_decay"
+    - "range_efficiency"
+    - "price_volatility"
+
+cache_strategy:
+  ttl: 300  # 5 minutes
+  invalidation_triggers:
+    - "position_transfer"
+    - "liquidity_change"
+    - "fee_collection"
+
+performance:
+  batch_size: 50
+  parallel_requests: 10
+  timeout_ms: 5000

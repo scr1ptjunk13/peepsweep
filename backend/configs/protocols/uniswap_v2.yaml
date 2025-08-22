@@ -1,0 +1,57 @@
+protocol:
+  name: "uniswap_v2"
+  type: "AMM"
+  version: "2.0"
+  chains:
+    1:  # Ethereum
+      factory: "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f"
+      router: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
+      multicall: "0x5ba1e12693dc8f9c48aad8770482f4739beed696"
+    137: # Polygon
+      factory: "0x5757371414417b8C6CAad45bAeF941aBc7d3Ab32"
+      router: "0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff"
+      multicall: "0x5ba1e12693dc8f9c48aad8770482f4739beed696"
+
+position_detection:
+  method: "erc20_balance"
+  pair_discovery:
+    - method: "event_logs"
+      event: "PairCreated(address,address,address,uint256)"
+      contract: "factory"
+      from_block: 10000835
+    - method: "balance_check"
+      min_balance: "0"
+
+position_details:
+  batch_calls:
+    - function: "getReserves"
+      outputs: ["uint112", "uint112", "uint32"]
+    - function: "totalSupply"
+      outputs: ["uint256"]
+    - function: "balanceOf"
+      inputs: ["address"]
+      outputs: ["uint256"]
+    - function: "token0"
+      outputs: ["address"]
+    - function: "token1"
+      outputs: ["address"]
+
+position_type: "erc20"
+risk_calculation:
+  il_formula: "uniswap_v2_constant_product"
+  volatility_window: 168
+  rebalancing_frequency: 0  # No rebalancing in V2
+  risk_factors:
+    - "impermanent_loss"
+    - "price_volatility"
+
+cache_strategy:
+  ttl: 300  # 5 minutes
+  invalidation_triggers:
+    - "liquidity_change"
+    - "price_change"
+
+performance:
+  batch_size: 100
+  parallel_requests: 20
+  timeout_ms: 3000

@@ -1,0 +1,61 @@
+protocol:
+  name: "sushiswap"
+  type: "AMM"
+  version: "2.0"
+  chains:
+    1:  # Ethereum
+      factory: "0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac"
+      router: "0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F"
+      multicall: "0x5ba1e12693dc8f9c48aad8770482f4739beed696"
+    137: # Polygon
+      factory: "0xc35DADB65012eC5796536bD9864eD8773aBc74C4"
+      router: "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506"
+      multicall: "0x5ba1e12693dc8f9c48aad8770482f4739beed696"
+    42161: # Arbitrum
+      factory: "0xc35DADB65012eC5796536bD9864eD8773aBc74C4"
+      router: "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506"
+      multicall: "0x5ba1e12693dc8f9c48aad8770482f4739beed696"
+
+position_detection:
+  method: "erc20_balance"
+  pair_discovery:
+    - method: "event_logs"
+      event: "PairCreated(address,address,address,uint256)"
+      contract: "factory"
+      from_block: 10794229
+    - method: "balance_check"
+      min_balance: "0"
+
+position_details:
+  batch_calls:
+    - function: "getReserves"
+      outputs: ["uint112", "uint112", "uint32"]
+    - function: "totalSupply"
+      outputs: ["uint256"]
+    - function: "balanceOf"
+      inputs: ["address"]
+      outputs: ["uint256"]
+    - function: "token0"
+      outputs: ["address"]
+    - function: "token1"
+      outputs: ["address"]
+
+position_type: "erc20"
+risk_calculation:
+  il_formula: "uniswap_v2_constant_product"  # Same IL formula as V2
+  volatility_window: 168
+  rebalancing_frequency: 0  # No rebalancing in V2-style
+  risk_factors:
+    - "impermanent_loss"
+    - "price_volatility"
+
+cache_strategy:
+  ttl: 300  # 5 minutes
+  invalidation_triggers:
+    - "liquidity_change"
+    - "price_change"
+
+performance:
+  batch_size: 100
+  parallel_requests: 20
+  timeout_ms: 3000
