@@ -1,1 +1,0 @@
-{"amountOut":"1899901017600000000","responseTime":0,"routes":[{"dex":"Uniswap V3","percentage":100.0,"amountOut":"951804810000000000","gasUsed":"150000"},{"dex":"Curve Finance","percentage":100.0,"amountOut":"948096207600000000","gasUsed":"120000"}],"priceImpact":0.1,"gasEstimate":"180000","savings":{"vsUniswap":0.15,"vsSushiswap":0.08,"vs1inch":0.02}}
