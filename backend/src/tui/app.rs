@@ -254,13 +254,17 @@ impl App {
 
                 // 🚀 Use real aggregator if available
                 if let Some(aggregator) = &self.aggregator {
+                    // Resolve token addresses and decimals based on chain
+                    let (token_in_addr, token_in_decimals) = self.resolve_token_info(&self.token_from, chain);
+                    let (token_out_addr, token_out_decimals) = self.resolve_token_info(&self.token_to, chain);
+                    
                     let params = crate::types::QuoteParams {
                         token_in: self.token_from.clone(),
-                        token_in_address: None, // TODO: Add token address resolution
-                        token_in_decimals: Some(18),
+                        token_in_address: token_in_addr,
+                        token_in_decimals: Some(token_in_decimals),
                         token_out: self.token_to.clone(),
-                        token_out_address: None, // TODO: Add token address resolution
-                        token_out_decimals: Some(18),
+                        token_out_address: token_out_addr,
+                        token_out_decimals: Some(token_out_decimals),
                         amount_in: self.amount_from.clone(),
                         chain: Some(chain.as_str().to_string()),
                         slippage: Some(0.5),
@@ -334,5 +338,30 @@ impl App {
             && !self.token_to.is_empty() 
             && !self.amount_from.is_empty()
             && !self.loading
+    }
+
+    fn resolve_token_info(&self, token: &str, chain: &Chain) -> (Option<String>, u8) {
+        match (token.to_uppercase().as_str(), chain) {
+            // Optimism tokens
+            ("ETH", Chain::Optimism) => (Some("0x0000000000000000000000000000000000000000".to_string()), 18),
+            ("WETH", Chain::Optimism) => (Some("0x4200000000000000000000000000000000000006".to_string()), 18),
+            ("USDC", Chain::Optimism) => (Some("0x7F5c764cBc14f9669B88837ca1490cCa17c31607".to_string()), 6),
+            ("USDT", Chain::Optimism) => (Some("0x94b008aA00579c1307B0EF2c499aD98a8ce58e58".to_string()), 6),
+            ("DAI", Chain::Optimism) => (Some("0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1".to_string()), 18),
+            ("WBTC", Chain::Optimism) => (Some("0x68f180fcCe6836688e9084f035309E29Bf0A2095".to_string()), 8),
+            ("OP", Chain::Optimism) => (Some("0x4200000000000000000000000000000000000042".to_string()), 18),
+            ("VELO", Chain::Optimism) => (Some("0x3c8B650257cFb5f272f799F5e2b4e65093a11a05".to_string()), 18),
+            
+            // Base tokens
+            ("ETH", Chain::Base) => (Some("0x0000000000000000000000000000000000000000".to_string()), 18),
+            ("WETH", Chain::Base) => (Some("0x4200000000000000000000000000000000000006".to_string()), 18),
+            ("USDC", Chain::Base) => (Some("0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913".to_string()), 6),
+            ("USDT", Chain::Base) => (Some("0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2".to_string()), 6),
+            ("DAI", Chain::Base) => (Some("0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb".to_string()), 18),
+            ("WBTC", Chain::Base) => (Some("0x03C7054BCB39f7b2e5B2c7AcB37583e32D70Cfa3".to_string()), 8),
+            
+            // Default fallback
+            _ => (None, 18),
+        }
     }
 }

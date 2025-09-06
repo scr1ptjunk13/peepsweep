@@ -4,7 +4,6 @@ use bralaladex_backend::types::QuoteParams;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
     println!("🚀 Testing Velodrome DEX Integration (Universal Framework)");
     println!("Philosophy: Token1 + Amount1 + Token2 → Amount2\n");
 
@@ -127,9 +126,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Test ETH/USDC on Optimism
     match velodrome.is_pair_supported(
-        "optimism", 
         "0x0000000000000000000000000000000000000000", 
-        "0x7F5c764cBc14f9669B88837ca1490cCa17c31607"
+        "0x7F5c764cBc14f9669B88837ca1490cCa17c31607",
+        "optimism"
     ).await {
         Ok(supported) => println!("   Optimism ETH/USDC: {}", supported),
         Err(e) => println!("   Optimism ETH/USDC: Error - {:?}", e),
@@ -137,9 +136,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test WETH/USDC on Base
     match velodrome.is_pair_supported(
-        "base", 
         "0x4200000000000000000000000000000000000006", 
-        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        "base"
     ).await {
         Ok(supported) => println!("   Base WETH/USDC: {}", supported),
         Err(e) => println!("   Base WETH/USDC: Error - {:?}", e),
@@ -147,9 +146,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test unsupported pair on Ethereum
     match velodrome.is_pair_supported(
-        "ethereum", 
         "0x0000000000000000000000000000000000000000", 
-        "0xA0b86a33E6441c8C06DD2b7c94b7E0e8b8b8b8b8"
+        "0xA0b86a33E6441c8C06DD2b7c94b7E0e8b8b8b8b8",
+        "ethereum"
     ).await {
         Ok(supported) => println!("   Ethereum ETH/USDC: {}", supported),
         Err(e) => println!("   Ethereum ETH/USDC: Error - {:?}", e),

@@ -71,15 +71,61 @@ impl VelodromeDex {
     }
 
     async fn get_velodrome_quote(&self, params: &QuoteParams) -> Result<U256, DexError> {
-        // Get token addresses - if this fails, let it fail
-        let token_in_addr = self.get_token_address(&params.token_in, &params.chain.as_ref().ok_or_else(|| DexError::InvalidInput("Missing chain".to_string()))?)?;
-        let token_out_addr = self.get_token_address(&params.token_out, &params.chain.as_ref().ok_or_else(|| DexError::InvalidInput("Missing chain".to_string()))?)?;
+        tracing::info!("🔄 Velodrome quote request: {} {} -> {} on {}", 
+            params.amount_in, params.token_in, params.token_out, 
+            params.chain.as_deref().unwrap_or("unknown"));
         
-        // Parse amount - if this fails, let it fail
-        let amount_in_wei = DexUtils::parse_amount_safe(&params.amount_in, params.token_in_decimals.unwrap_or(18))?;
+        let chain = params.chain.as_ref().ok_or_else(|| {
+            tracing::error!("❌ Velodrome: Missing chain in params");
+            DexError::InvalidInput("Missing chain".to_string())
+        })?;
         
-        // Make real API call - if this fails, let it fail with the real error
-        self.call_router("", amount_in_wei, &token_in_addr, &token_out_addr, &params.chain.as_ref().ok_or_else(|| DexError::InvalidInput("Missing chain".to_string()))?).await
+        // Get token addresses with detailed logging
+        let token_in_addr = match self.get_token_address(&params.token_in, chain) {
+            Ok(addr) => {
+                tracing::debug!("✅ Token IN resolved: {} -> {}", params.token_in, addr);
+                addr
+            }
+            Err(e) => {
+                tracing::error!("❌ Failed to resolve token IN {}: {:?}", params.token_in, e);
+                return Err(e);
+            }
+        };
+        
+        let token_out_addr = match self.get_token_address(&params.token_out, chain) {
+            Ok(addr) => {
+                tracing::debug!("✅ Token OUT resolved: {} -> {}", params.token_out, addr);
+                addr
+            }
+            Err(e) => {
+                tracing::error!("❌ Failed to resolve token OUT {}: {:?}", params.token_out, e);
+                return Err(e);
+            }
+        };
+        
+        // Parse amount safely with logging
+        let amount_in_wei = match DexUtils::parse_amount_safe(&params.amount_in, params.token_in_decimals.unwrap_or(18)) {
+            Ok(amount) => {
+                tracing::debug!("✅ Amount parsed: {} -> {} wei", params.amount_in, amount);
+                amount
+            }
+            Err(e) => {
+                tracing::error!("❌ Failed to parse amount {}: {:?}", params.amount_in, e);
+                return Err(e);
+            }
+        };
+        
+        // Real contract call - NO FALLBACK
+        match self.call_velodrome_router(chain, &token_in_addr, &token_out_addr, amount_in_wei).await {
+            Ok(result) => {
+                tracing::info!("✅ Velodrome quote successful: {} wei output", result);
+                Ok(result)
+            }
+            Err(e) => {
+                tracing::error!("❌ Velodrome contract call failed: {:?}", e);
+                Err(e)
+            }
+        }
     }
 
     fn get_token_address(&self, token_symbol: &str, chain: &str) -> Result<String, DexError> {
@@ -109,62 +155,76 @@ impl VelodromeDex {
         Ok(address.to_string())
     }
 
-    async fn call_router(
+    async fn call_velodrome_router(
         &self,
-        _router_address: &str,
-        amount_in: U256,
+        chain: &str,
         token_in: &str,
         token_out: &str,
-        chain: &str,
+        amount_in: U256,
     ) -> Result<U256, DexError> {
-        // REAL ERROR - QuickNode doesn't have a swap API like this
-        // This will fail with a real network error showing the actual problem
-        let client = reqwest::Client::new();
+        let chain_config = self.get_chain_config(chain)?;
         
-        let url = "https://api.quicknode.com/v1/swap/quote";
+        // Parse addresses
+        let token_in_addr = Address::from_str(token_in)
+            .map_err(|_| DexError::InvalidAddress(format!("Invalid token_in address: {}", token_in)))?;
+        let token_out_addr = Address::from_str(token_out)
+            .map_err(|_| DexError::InvalidAddress(format!("Invalid token_out address: {}", token_out)))?;
+        let router_addr = Address::from_str(&chain_config.router_address)
+            .map_err(|_| DexError::InvalidAddress(format!("Invalid router address: {}", chain_config.router_address)))?;
+        let factory_addr = Address::from_str(&chain_config.factory_address)
+            .map_err(|_| DexError::InvalidAddress(format!("Invalid factory address: {}", chain_config.factory_address)))?;
+
+        // Get provider
+        let provider = self.provider_cache.get_provider(chain).await?;
+
+        // Generate route strategies (direct + WETH routing)
+        let weth_addr = match chain {
+            "optimism" | "base" => "0x4200000000000000000000000000000000000006",
+            _ => return Err(DexError::UnsupportedChain(format!("Chain {} not supported", chain)))
+        };
         
-        let request_body = serde_json::json!({
-            "target": "velo",
-            "chain": chain,
-            "tokenIn": token_in,
-            "tokenOut": token_out,
-            "amountIn": amount_in.to_string(),
-            "slippage": "0.5"
-        });
+        let route_strategies = self.generate_routes(token_in_addr, token_out_addr, factory_addr, weth_addr);
 
-        let response = client
-            .post(url)
-            .json(&request_body)
-            .timeout(std::time::Duration::from_secs(5))
-            .send()
-            .await
-            .map_err(|e| DexError::NetworkError(e))?;
-
-        // This will show the real HTTP error (404, 403, etc.)
-        if !response.status().is_success() {
-            return Err(DexError::ApiError(format!(
-                "QuickNode API returned HTTP {}: {}",
-                response.status(),
-                response.text().await.unwrap_or_default()
-            )));
+        // Try each route strategy
+        for routes in route_strategies {
+            match self.call_router_with_routes(&provider, router_addr, amount_in, routes).await {
+                Ok(amount_out) if amount_out > U256::ZERO => {
+                    return Ok(amount_out);
+                }
+                Ok(_) => continue, // Zero output, try next route
+                Err(e) => {
+                    tracing::debug!("Route failed: {:?}", e);
+                    continue;
+                }
+            }
         }
 
-        let response_text = response.text().await
-            .map_err(|e| DexError::NetworkError(e))?;
+        Err(DexError::UnsupportedPair("No viable Velodrome route found".into()))
+    }
 
-        let json_response: serde_json::Value = serde_json::from_str(&response_text)
-            .map_err(|e| DexError::JsonError(e))?;
+    async fn call_router_with_routes(
+        &self,
+        provider: &alloy::providers::RootProvider<alloy::transports::http::Http<alloy::transports::http::Client>>,
+        router_address: Address,
+        amount_in: U256,
+        routes: Vec<Route>,
+    ) -> Result<U256, DexError> {
+        // Create contract instance using #[sol(rpc)]
+        let router = IVelodromeRouter::new(router_address, provider);
 
-        // Parse amount_out from response
-        if let Some(amount_out_str) = json_response["amountOut"].as_str() {
-            let amount_out = U256::from_str_radix(amount_out_str, 10)
-                .map_err(|_| DexError::ParseError("Invalid amount_out format".into()))?;
-            Ok(amount_out)
-        } else {
-            Err(DexError::InvalidResponse(format!(
-                "Missing amountOut in response. Full response: {}",
-                response_text
-            )))
+        // Call getAmountsOut - Alloy handles ABI encoding/decoding
+        match router.getAmountsOut(amount_in, routes).call().await {
+            Ok(amounts) => {
+                if let Some(last_amount) = amounts.amounts.last() {
+                    Ok(*last_amount)
+                } else {
+                    Ok(U256::ZERO)
+                }
+            }
+            Err(e) => {
+                tracing::debug!("Router call failed: {:?}", e);
+                Err(DexError::ContractCallFailed("Router call failed".into()))
+            }
         }
     }
 
