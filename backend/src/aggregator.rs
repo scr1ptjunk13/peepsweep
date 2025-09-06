@@ -1,35 +1,13 @@
-use crate::cache::CacheManager;
-use crate::dexes::{
-    ApeSwapDex,
-    PancakeSwapDex,
-    // UniswapDex,
-    SpookySwapDex,
-    SpiritSwapDex,
-    DexIntegration, 
-    DexError
-};
-use crate::types::{QuoteParams, QuoteResponse, RouteBreakdown, SavingsComparison, SwapParams, SwapResponse};
-use crate::routing::{AdvancedRouter, RouteGenerator};
-use crate::routing::route_generator::DexInstance;
-use crate::mev_protection::{MevProtectionSuite, MevProtectionError};
+use crate::types::{QuoteParams, QuoteResponse, RouteBreakdown, SavingsComparison};
+use crate::dexes::{DexIntegration, DexError, VelodromeDex};
 use redis::Client as RedisClient;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
-use thiserror::Error;
-use tracing::{error, info, instrument, warn};
-use once_cell::sync::Lazy;
-use tokio::sync::RwLock;
+use std::sync::Arc;
 use std::collections::HashMap;
-
-#[derive(Clone, Debug)]
-struct CachedQuote {
-    quote: QuoteResponse,
-    timestamp: Instant,
-}
-
-// ULTRA-FAST IN-MEMORY CACHE - <1ms responses!
-static ULTRA_FAST_CACHE: Lazy<Arc<RwLock<HashMap<String, CachedQuote>>>> = 
-    Lazy::new(|| Arc::new(RwLock::new(HashMap::new())));
+use thiserror::Error;
+use tracing::{info, warn, debug};
+use tokio::sync::RwLock;
+use futures::future::join_all;
 
 #[derive(Error, Debug)]
 pub enum AggregatorError {
@@ -43,166 +21,120 @@ pub enum AggregatorError {
     DexError(String),
 }
 
+// Circuit breaker for failing DEXes
+#[derive(Debug, Clone)]
+struct CircuitBreaker {
+    failure_count: u32,
+    last_failure: Option<Instant>,
+    threshold: u32,
+    timeout: Duration,
+}
+
+impl CircuitBreaker {
+    fn new() -> Self {
+        Self {
+            failure_count: 0,
+            last_failure: None,
+            threshold: 3, // Trip after 3 failures
+            timeout: Duration::from_secs(30), // 30 second timeout
+        }
+    }
+
+    fn is_open(&self) -> bool {
+        if self.failure_count >= self.threshold {
+            if let Some(last_failure) = self.last_failure {
+                return last_failure.elapsed() < self.timeout;
+            }
+        }
+        false
+    }
+
+    fn record_success(&mut self) {
+        self.failure_count = 0;
+        self.last_failure = None;
+    }
+
+    fn record_failure(&mut self) {
+        self.failure_count += 1;
+        self.last_failure = Some(Instant::now());
+    }
+}
+
+// Quote cache entry
+#[derive(Debug, Clone)]
+struct CachedQuote {
+    quote: RouteBreakdown,
+    timestamp: Instant,
+    ttl: Duration,
+}
+
+impl CachedQuote {
+    fn is_expired(&self) -> bool {
+        self.timestamp.elapsed() > self.ttl
+    }
+}
+
 pub struct DEXAggregator {
     dexes: Vec<Box<dyn DexIntegration + Send + Sync>>,
-    cache: CacheManager,
-    advanced_router: Arc<AdvancedRouter>,
-    route_generator: Arc<RouteGenerator>,
-    mev_protection: Option<Arc<MevProtectionSuite>>,
+    circuit_breakers: Arc<RwLock<HashMap<String, CircuitBreaker>>>,
+    quote_cache: Arc<RwLock<HashMap<String, CachedQuote>>>,
+}
+
+impl std::fmt::Debug for DEXAggregator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DEXAggregator")
+            .field("dex_count", &self.dexes.len())
+            .field("circuit_breakers", &"<HashMap>")
+            .field("quote_cache", &"<HashMap>")
+            .finish()
+    }
 }
 
 impl DEXAggregator {
-    pub async fn new(redis_client: RedisClient) -> Result<Self, anyhow::Error> {
+    pub async fn new(_redis_client: RedisClient) -> Result<Self, anyhow::Error> {
+        info!("🚀 Initializing High-Speed Multi-Chain DEX Aggregator...");
+        
         let mut dexes: Vec<Box<dyn DexIntegration + Send + Sync>> = Vec::new();
         
-        // Initialize Uniswap V3 DEX - DISABLED
-        // info!("🔄 Initializing Uniswap V3...");
-        // match UniswapDex::new().await {
-        //     Ok(uniswap) => {
-        //         dexes.push(Box::new(uniswap));
-        //         info!("✅ Uniswap V3 initialized successfully (DEX count: {})", dexes.len());
-        //     },
-        //     Err(e) => warn!("❌ Failed to initialize Uniswap: {}", e),
-        // }
+        // Initialize Velodrome DEX
+        info!("🔄 Initializing Velodrome (Optimism + Base)...");
+        let velodrome = VelodromeDex::new();
+        dexes.push(Box::new(velodrome));
+        info!("✅ Velodrome initialized successfully");
         
-        // Initialize PancakeSwap DEX
-        info!("🔄 Initializing PancakeSwap...");
-        let pancakeswap = PancakeSwapDex::new();
-        dexes.push(Box::new(pancakeswap));
-        info!("✅ PancakeSwap initialized successfully (DEX count: {})", dexes.len());
+        // TODO: Add more DEXes here for 25+ support
+        // dexes.push(Box::new(UniswapV3Dex::new()));
+        // dexes.push(Box::new(SushiSwapDex::new()));
+        // dexes.push(Box::new(CurveDex::new()));
+        // etc...
         
-        // Initialize ApeSwap DEX
-        info!("🔄 Initializing ApeSwap...");
-        match ApeSwapDex::new().await {
-            Ok(apeswap) => {
-                dexes.push(Box::new(apeswap));
-                info!("✅ ApeSwap initialized successfully (DEX count: {})", dexes.len());
-            },
-            Err(e) => warn!("❌ Failed to initialize ApeSwap: {}", e),
-        }
+        info!("🎯 DEX Aggregator initialized with {} DEXes", dexes.len());
         
-        // Initialize SpookySwap DEX
-        info!("🔄 Initializing SpookySwap...");
-        match SpookySwapDex::new().await {
-            Ok(spookyswap) => {
-                dexes.push(Box::new(spookyswap));
-                info!("✅ SpookySwap initialized successfully (DEX count: {})", dexes.len());
-            },
-            Err(e) => warn!("❌ Failed to initialize SpookySwap: {}", e),
-        }
-        
-        // Initialize SpiritSwap DEX
-        info!("🔄 Initializing SpiritSwap...");
-        match SpiritSwapDex::new().await {
-            Ok(spiritswap) => {
-                dexes.push(Box::new(spiritswap));
-                info!("✅ SpiritSwap initialized successfully (DEX count: {})", dexes.len());
-            },
-            Err(e) => warn!("❌ Failed to initialize SpiritSwap: {}", e),
-        }
-        
-        // Commented out DEXes that are not currently available
-        // TODO: Re-enable when implementations are ready
-        
-        // // Initialize Balancer V2 DEX
-        // info!("🔄 Initializing Balancer V2...");
-        // match BalancerDex::new().await {
-        //     Ok(balancer) => {
-        //         dexes.push(Box::new(balancer));
-        //         info!("✅ Balancer V2 initialized successfully (DEX count: {})", dexes.len());
-        //     },
-        //     Err(e) => warn!("❌ Failed to initialize Balancer V2: {}", e),
-        // }
-        
-        // Initialize ApeSwap DEX
-        info!("🔄 Initializing ApeSwap...");
-        match ApeSwapDex::new().await {
-            Ok(apeswap) => {
-                dexes.push(Box::new(apeswap));
-                info!("✅ ApeSwap initialized successfully (DEX count: {})", dexes.len());
-            },
-            Err(e) => warn!("❌ Failed to initialize ApeSwap: {}", e),
-        }
-        
-        // Commented out DEXes that are not currently available
-        // // Initialize Fraxswap DEX
-        // info!("🔄 Initializing Fraxswap...");
-        // let fraxswap = FraxswapDex::new();
-        // dexes.push(Box::new(fraxswap));
-        // info!("✅ Fraxswap initialized successfully (DEX count: {})", dexes.len());
-        
-        // // Initialize Maverick DEX
-        // info!("🔄 Initializing Maverick...");
-        // let maverick = MaverickDex::new();
-        // dexes.push(Box::new(maverick));
-        // info!("✅ Maverick initialized successfully (DEX count: {})", dexes.len());
-        
-        
-        let cache = CacheManager::new("redis://localhost:6379").await?;
-        
-        // Initialize advanced 3-tier routing system
-        let advanced_router = Arc::new(AdvancedRouter::new().await);
-        
-        // Convert Box<dyn DexIntegration> to DexInstance enum for route generator
-        let dex_instances: Vec<DexInstance> = vec![];
-        
-        // Initialize 50+ route generator with all DEX integrations
-        let route_generator = Arc::new(RouteGenerator::new(dex_instances));
-        
-        // Initialize MEV Protection Suite
-        info!("🔄 Initializing MEV Protection Suite...");
-        let mev_protection = match MevProtectionSuite::new().await {
-            Ok(suite) => {
-                info!("✅ MEV Protection Suite initialized successfully");
-                info!("🔧 MEV Protection Suite created and wrapped in Arc");
-                Some(Arc::new(suite))
-            },
-            Err(e) => {
-                error!("❌ Failed to initialize MEV Protection: {:?}", e);
-                error!("🚨 MEV Protection will be DISABLED for this session");
-                None
-            }
-        };
-        
-        info!("🚀 DEX Aggregator initialized with {} DEXes, 3-tier routing, 50+ route generation, and MEV protection", dexes.len());
-        
-        Ok(Self { dexes, cache, advanced_router, route_generator, mev_protection })
+        Ok(Self {
+            dexes,
+            circuit_breakers: Arc::new(RwLock::new(HashMap::new())),
+            quote_cache: Arc::new(RwLock::new(HashMap::new())),
+        })
     }
 
-    #[instrument(skip(self))]
     pub async fn get_optimal_route(&self, params: QuoteParams) -> Result<QuoteResponse, AggregatorError> {
         let start = Instant::now();
         
-        // 🚀 STEP 1: Generate 50+ candidate routes simultaneously
-        info!("🔥 Generating 50+ routes across all DEXes for {}->{}", params.token_in, params.token_out);
-        let candidate_routes = match self.route_generator.generate_routes(&params).await {
-            Ok(routes) => {
-                info!("✅ Generated {} candidate routes", routes.len());
-                routes
-            },
-            Err(e) => {
-                warn!("Route generation failed: {}, falling back to advanced routing", e);
-                return self.get_advanced_route(&params).await;
-            }
-        };
-
-        // 🚀 STEP 2: If we have 50+ routes, use them directly with optimized selection
-        if candidate_routes.len() >= 50 {
-            let generation_time = start.elapsed().as_millis();
-            info!("🎯 Using 50+ route generation ({}ms)", generation_time);
-            
-            // Take top 5 routes for final response
-            let top_routes: Vec<RouteBreakdown> = candidate_routes.into_iter().take(5).collect();
-            
-            // Calculate total amount out from top routes
-            let total_amount: u64 = top_routes.iter()
-                .map(|r| r.amount_out.parse::<u64>().unwrap_or(0))
-                .sum();
-
+        // Generate cache key for this quote request
+        let cache_key = format!("{}-{}-{}-{}", 
+            params.chain.as_deref().unwrap_or("unknown"),
+            params.token_in, 
+            params.token_out, 
+            params.amount_in
+        );
+        
+        // 🚀 STEP 1: Check cache first (10-30 second TTL)
+        if let Some(cached_quote) = self.get_cached_quote(&cache_key).await {
+            debug!("💨 Cache hit for {}, returning cached result", cache_key);
             return Ok(QuoteResponse {
-                amount_out: total_amount.to_string(),
-                response_time: generation_time,
-                routes: top_routes,
+                amount_out: cached_quote.amount_out.clone(),
+                response_time: start.elapsed().as_millis(),
+                routes: vec![cached_quote],
                 price_impact: 0.1,
                 gas_estimate: "150000".to_string(),
                 savings: Some(SavingsComparison {
@@ -212,386 +144,165 @@ impl DEXAggregator {
                 }),
             });
         }
-
-        // 🚀 STEP 3: Fallback to advanced 3-tier routing if insufficient routes
-        info!("Generated {} routes (< 50), falling back to advanced routing", candidate_routes.len());
-        match self.get_advanced_route(&params).await {
-            Ok(response) => Ok(response),
-            Err(_) => {
-                info!("Advanced routing failed, falling back to legacy routing");
-                self.get_quote_with_guaranteed_routes(&params).await
-            }
-        }
-    }
-    
-    pub async fn get_quote_with_guaranteed_routes(&self, params: &QuoteParams) -> Result<QuoteResponse, AggregatorError> {
-        let start = Instant::now();
         
-        // ULTRA-FAST CACHE CHECK FIRST - <1ms!
-        let cache_key = format!("{}-{}-{}", params.token_in, params.token_out, params.amount_in);
+        // 🚀 STEP 2: Concurrent DEX fetching with circuit breakers
+        info!("⚡ Fetching quotes from {} DEXes concurrently...", self.dexes.len());
+        let quote_futures = self.create_concurrent_quote_futures(&params).await;
         
-        // Check ultra-fast in-memory cache
-        {
-            let cache = ULTRA_FAST_CACHE.read().await;
-            if let Some(cached) = cache.get(&cache_key) {
-                if cached.timestamp.elapsed() < Duration::from_secs(30) {
-                    let response_time = start.elapsed().as_millis();
-                    info!("ULTRA-FAST cache hit in {}ms", response_time);
-                    let mut response = cached.quote.clone();
-                    response.response_time = response_time;
-                    return Ok(response);
-                }
-            }
-        }
+        // Execute all DEX queries concurrently with timeout
+        let timeout_duration = Duration::from_millis(2000); // 2 second timeout
+        let results = tokio::time::timeout(timeout_duration, join_all(quote_futures)).await
+            .map_err(|_| AggregatorError::AllDexesFailed)?;
         
-        // FORCE both DEXes to respond - use fallbacks if needed
-        let (uniswap_quote, sushiswap_quote) = tokio::join!(
-            self.get_uniswap_with_fallback(params),
-            self.get_sushiswap_with_fallback(params)
-        );
+        // 🚀 STEP 3: Process results and update circuit breakers
+        let mut successful_quotes = Vec::new();
+        let mut circuit_breakers = self.circuit_breakers.write().await;
         
-        // ALWAYS create 2 routes - even with fallbacks
-        let mut routes = Vec::new();
-        
-        // Route 1: Uniswap V3 (70%)
-        if let Ok(uniswap) = uniswap_quote {
-            routes.push(RouteBreakdown {
-                dex: "Uniswap V3".to_string(),
-                percentage: 70.0,
-                amount_out: self.calculate_portion(&uniswap.amount_out, 70.0),
-                gas_used: uniswap.gas_used,
-            });
-        } else {
-            // FALLBACK Uniswap quote
-            routes.push(RouteBreakdown {
-                dex: "Uniswap V3 (estimated)".to_string(),
-                percentage: 70.0,
-                amount_out: self.estimate_uniswap_output(params),
-                gas_used: "180000".to_string(),
-            });
-        }
-        
-        // Route 2: SushiSwap (30%)
-        if let Ok(sushiswap) = sushiswap_quote {
-            routes.push(RouteBreakdown {
-                dex: "SushiSwap".to_string(),
-                percentage: 30.0,
-                amount_out: self.calculate_portion(&sushiswap.amount_out, 30.0),
-                gas_used: sushiswap.gas_used,
-            });
-        } else {
-            // FALLBACK SushiSwap quote
-            routes.push(RouteBreakdown {
-                dex: "SushiSwap (estimated)".to_string(),
-                percentage: 30.0,
-                amount_out: self.estimate_sushiswap_output(params),
-                gas_used: "200000".to_string(),
-            });
-        }
-        
-        // Calculate total output
-        let total_amount_out: u64 = routes.iter()
-            .map(|r| r.amount_out.parse::<u64>().unwrap_or(0))
-            .sum();
-        
-        let response_time = start.elapsed().as_millis();
-        
-        // Calculate savings comparison
-        let savings = self.calculate_savings(&routes).await;
-        
-        let response = QuoteResponse {
-            amount_out: total_amount_out.to_string(),
-            response_time,
-            routes,
-            price_impact: 0.1,
-            gas_estimate: "180000".to_string(),
-            savings,
-        };
-        
-        // Store in ULTRA-FAST cache for instant future responses
-        {
-            let mut cache = ULTRA_FAST_CACHE.write().await;
-            cache.insert(cache_key.clone(), CachedQuote {
-                quote: response.clone(),
-                timestamp: Instant::now(),
-            });
-        }
-        
-        info!("Guaranteed 2-route quote found in {}ms", response_time);
-        Ok(response)
-    }
-    
-    async fn get_advanced_route(&self, params: &QuoteParams) -> Result<QuoteResponse, AggregatorError> {
-        let start = Instant::now();
-        
-        // ULTRA-FAST CACHE CHECK FIRST
-        let cache_key = format!("{}-{}-{}", params.token_in, params.token_out, params.amount_in);
-        
-        // Check ultra-fast in-memory cache
-        {
-            let cache = ULTRA_FAST_CACHE.read().await;
-            if let Some(cached) = cache.get(&cache_key) {
-                if cached.timestamp.elapsed() < Duration::from_secs(30) {
-                    let response_time = start.elapsed().as_millis();
-                    info!("ULTRA-FAST cache hit in {}ms", response_time);
-                    let mut response = cached.quote.clone();
-                    response.response_time = response_time;
-                    return Ok(response);
-                }
-            }
-        }
-        
-        // Use 3-tier advanced routing
-        let routes = self.advanced_router.get_optimal_route(params).await
-            .map_err(|e| AggregatorError::DexError(e.to_string()))?;
-        
-        if routes.is_empty() {
-            return Err(AggregatorError::NoValidRoutes);
-        }
-        
-        // Calculate total output
-        let total_amount_out: u64 = routes.iter()
-            .map(|r| r.amount_out.parse::<u64>().unwrap_or(0))
-            .sum();
-        
-        let response_time = start.elapsed().as_millis();
-        
-        // Calculate savings comparison
-        let savings = self.calculate_savings(&routes).await;
-        
-        let response = QuoteResponse {
-            amount_out: total_amount_out.to_string(),
-            response_time,
-            routes,
-            price_impact: 0.1,
-            gas_estimate: "180000".to_string(),
-            savings,
-        };
-        
-        // Store in ULTRA-FAST cache
-        {
-            let mut cache = ULTRA_FAST_CACHE.write().await;
-            cache.insert(cache_key.clone(), CachedQuote {
-                quote: response.clone(),
-                timestamp: Instant::now(),
-            });
-        }
-        
-        info!("Advanced 3-tier routing completed in {}ms with {} routes", response_time, response.routes.len());
-        Ok(response)
-    }
-    
-    async fn get_uniswap_with_fallback(&self, params: &QuoteParams) -> Result<RouteBreakdown, DexError> {
-        // Try real API with 100ms timeout
-        if let Some(uniswap_dex) = self.dexes.iter().find(|d| d.get_name() == "Uniswap V3") {
-            match tokio::time::timeout(Duration::from_millis(100), uniswap_dex.get_quote(params)).await {
-                Ok(Ok(quote)) => return Ok(quote),
-                _ => {}
-            }
-        }
-        
-        // INSTANT fallback
-        Ok(RouteBreakdown {
-            dex: "Uniswap V3 (fallback)".to_string(),
-            percentage: 100.0,
-            amount_out: self.estimate_uniswap_output(params),
-            gas_used: "180000".to_string(),
-        })
-    }
-    
-    async fn get_sushiswap_with_fallback(&self, params: &QuoteParams) -> Result<RouteBreakdown, DexError> {
-        // Try real API with 100ms timeout
-        if let Some(sushiswap_dex) = self.dexes.iter().find(|d| d.get_name() == "SushiSwap") {
-            match tokio::time::timeout(Duration::from_millis(100), sushiswap_dex.get_quote(params)).await {
-                Ok(Ok(quote)) => return Ok(quote),
-                _ => {}
-            }
-        }
-        
-        // INSTANT fallback
-        Ok(RouteBreakdown {
-            dex: "SushiSwap (fallback)".to_string(),
-            percentage: 100.0,
-            amount_out: self.estimate_sushiswap_output(params),
-            gas_used: "200000".to_string(),
-        })
-    }
-    
-    fn calculate_portion(&self, total_amount: &str, percentage: f64) -> String {
-        let amount = total_amount.parse::<u64>().unwrap_or(0);
-        (((amount as f64) * (percentage / 100.0)) as u64).to_string()
-    }
-    
-    fn estimate_uniswap_output(&self, params: &QuoteParams) -> String {
-        let amount_in = params.amount_in.parse::<u64>().unwrap_or(0) as f64 / 1e18;
-        let usdc_out = (amount_in * 3380.0 * 1e6) as u64; // Slightly better rate for Uniswap
-        usdc_out.to_string()
-    }
-    
-    fn estimate_sushiswap_output(&self, params: &QuoteParams) -> String {
-        let amount_in = params.amount_in.parse::<u64>().unwrap_or(0) as f64 / 1e18;
-        let usdc_out = (amount_in * 3360.0 * 1e6) as u64; // Slightly worse rate for SushiSwap
-        usdc_out.to_string()
-    }
-
-    fn optimize_routes(&self, routes: &[RouteBreakdown]) -> Vec<RouteBreakdown> {
-        if routes.is_empty() {
-            return Vec::new();
-        }
-
-        // Implement route splitting: 70% Uniswap V3, 30% SushiSwap (if both available)
-        let mut optimized_routes = Vec::new();
-        
-        let uniswap_route = routes.iter().find(|r| r.dex.contains("Uniswap"));
-        let sushi_route = routes.iter().find(|r| r.dex.contains("Sushi"));
-        
-        match (uniswap_route, sushi_route) {
-            (Some(uni), Some(sushi)) => {
-                // Split 70% Uniswap, 30% SushiSwap
-                let mut uni_split = uni.clone();
-                uni_split.percentage = 70.0;
-                
-                let mut sushi_split = sushi.clone();
-                sushi_split.percentage = 30.0;
-                
-                // Adjust amounts based on percentage
-                if let (Ok(uni_amount), Ok(sushi_amount)) = (uni.amount_out.parse::<u64>(), sushi.amount_out.parse::<u64>()) {
-                    uni_split.amount_out = ((uni_amount as f64 * 0.7) as u64).to_string();
-                    sushi_split.amount_out = ((sushi_amount as f64 * 0.3) as u64).to_string();
-                }
-                
-                optimized_routes.push(uni_split);
-                optimized_routes.push(sushi_split);
-            }
-            (Some(route), None) | (None, Some(route)) => {
-                // Only one DEX available, use 100%
-                let mut single_route = route.clone();
-                single_route.percentage = 100.0;
-                optimized_routes.push(single_route);
-            }
-            (None, None) => {
-                // No routes available
-                return Vec::new();
-            }
-        }
-        
-        optimized_routes
-    }
-
-    async fn calculate_savings(&self, routes: &[RouteBreakdown]) -> Option<SavingsComparison> {
-        // Simplified savings calculation
-        // In production, you'd compare against individual DEX quotes
-        Some(SavingsComparison {
-            vs_uniswap: 0.15,
-            vs_sushiswap: 0.08,
-            vs_1inch: 0.02,
-        })
-    }
-
-    pub async fn execute_swap(&self, params: SwapParams) -> Result<SwapResponse, AggregatorError> {
-        info!("Executing swap for user: {} using {} routes", params.user_address, params.routes.len());
-        
-        // Simulate real transaction execution with proper validation
-        if params.routes.is_empty() {
-            return Err(AggregatorError::NoValidRoutes);
-        }
-        
-        let best_route = &params.routes[0];
-        let estimated_gas = best_route.gas_used.parse::<u64>().unwrap_or(180000);
-        
-        // Log route information for advanced routing
-        for (i, route) in params.routes.iter().enumerate() {
-            info!("Route {}: {} ({}% allocation)", i + 1, route.dex, route.percentage);
-        }
-        
-        // In production, this would:
-        // 1. Build the transaction data for the optimal route
-        // 2. Estimate gas more accurately
-        // 3. Submit to mempool with proper nonce management
-        // 4. Return real transaction hash
-        
-        // Generate realistic transaction hash
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        params.user_address.hash(&mut hasher);
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-            .hash(&mut hasher);
-        let tx_hash = format!("0x{:064x}", hasher.finish());
-        
-        Ok(SwapResponse {
-            tx_hash,
-            amount_out: params.amount_out_min,
-            gas_used: estimated_gas.to_string(),
-            gas_price: "20000000000".to_string(), // 20 gwei default
-            status: "submitted".to_string(),
-            mev_protection: None,
-            execution_time_ms: 0,
-        })
-    }
-    
-    /// Execute swap with MEV protection - FIXED (No #[instrument])
-    pub async fn execute_protected_swap(&self, params: SwapParams) -> Result<SwapResponse, AggregatorError> {
-        println!("🛡️ EXECUTE_PROTECTED_SWAP ENTRY: MEV protection availability: {}", if self.mev_protection.is_some() { "AVAILABLE" } else { "NOT AVAILABLE" });
-        
-        if let Some(mev_protection) = &self.mev_protection {
-            println!("🛡️ Executing MEV-protected swap: {} -> {}", params.token_in, params.token_out);
-            info!("🛡️ Executing MEV-protected swap: {} -> {}", params.token_in, params.token_out);
-            println!("🔧 About to call mev_protection.protect_transaction()");
-            info!("🔧 About to call mev_protection.protect_transaction()");
-            
-            match mev_protection.protect_transaction(&params).await {
-                Ok(response) => {
-                    println!("✅ MEV-protected swap completed successfully with Flashbots");
-                    info!("✅ MEV-protected swap completed successfully with Flashbots");
-                    Ok(response)
-                },
-                Err(e) => {
-                    println!("❌ MEV protection failed with error: {:?}", e);
-                    warn!("❌ MEV protection failed with error: {:?}", e);
-                    println!("🔄 Falling back to regular swap due to MEV protection failure");
-                    warn!("🔄 Falling back to regular swap due to MEV protection failure");
+        for join_result in results {
+            match join_result {
+                Ok((dex_name, quote_result)) => {
+                    let breaker = circuit_breakers.entry(dex_name.clone()).or_insert_with(CircuitBreaker::new);
                     
-                    // Execute regular swap but include MEV protection attempt info
-                    let mut response = self.execute_swap(params).await?;
-                    response.mev_protection = Some(format!("MEV protection attempted but failed: {:?}", e));
-                    Ok(response)
+                    match quote_result {
+                        Ok(quote) => {
+                            breaker.record_success();
+                            successful_quotes.push(quote.clone());
+                            
+                            // Cache successful quote
+                            self.cache_quote(&cache_key, quote, Duration::from_secs(15)).await;
+                            
+                            debug!("✅ {} quote successful", dex_name);
+                        }
+                        Err(e) => {
+                            breaker.record_failure();
+                            warn!("❌ {} failed: {:?}", dex_name, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("❌ Task join failed: {:?}", e);
                 }
             }
-        } else {
-            println!("❌ MEV protection not available, executing regular swap");
-            warn!("❌ MEV protection not available, executing regular swap");
-            self.execute_swap(params).await
         }
+        
+        drop(circuit_breakers); // Release lock early
+        
+        if successful_quotes.is_empty() {
+            return Err(AggregatorError::NoValidRoutes);
+        }
+        
+        // 🚀 STEP 4: Apply optimal route selection algorithm
+        let optimal_routes = self.select_optimal_routes(successful_quotes);
+        let total_amount_out = self.calculate_total_output(&optimal_routes);
+        
+        let response_time = start.elapsed().as_millis();
+        info!("🎯 Aggregation completed in {}ms with {} routes", response_time, optimal_routes.len());
+        
+        Ok(QuoteResponse {
+            amount_out: total_amount_out,
+            response_time,
+            routes: optimal_routes,
+            price_impact: 0.1,
+            gas_estimate: "150000".to_string(),
+            savings: Some(SavingsComparison {
+                vs_uniswap: 0.15,
+                vs_sushiswap: 0.08,
+                vs_1inch: 0.02,
+            }),
+        })
     }
 
-    pub async fn get_routing_statistics(&self) -> String {
-        let stats = self.advanced_router.get_route_statistics().await;
-        let mev_status = if self.mev_protection.is_some() { "enabled" } else { "disabled" };
-        format!(
-            "Routing Stats: {} direct routes, {} multi-hop paths, {} complex routes, MEV protection: {}",
-            stats.direct_routes_available,
-            stats.multi_hop_paths,
-            stats.complex_routes,
-            mev_status
-        )
+    // 🚀 Create concurrent futures for all DEXes with circuit breaker checks
+    async fn create_concurrent_quote_futures(&self, params: &QuoteParams) -> Vec<tokio::task::JoinHandle<(String, Result<RouteBreakdown, DexError>)>> {
+        let mut futures = Vec::new();
+        let circuit_breakers = self.circuit_breakers.read().await;
+        
+        for dex in &self.dexes {
+            let dex_name = dex.get_name().to_string();
+            
+            // Check circuit breaker
+            if let Some(breaker) = circuit_breakers.get(&dex_name) {
+                if breaker.is_open() {
+                    debug!("🔴 Circuit breaker open for {}, skipping", dex_name);
+                    continue;
+                }
+            }
+            
+            // Check if DEX supports this chain
+            let chain = params.chain.as_deref().unwrap_or("ethereum");
+            if !dex.get_supported_chains().contains(&chain) {
+                debug!("⚠️ {} doesn't support chain {}, skipping", dex_name, chain);
+                continue;
+            }
+            
+            // Create concurrent future for this DEX - REAL API CALL
+            let params_clone = params.clone();
+            let dex_name_clone = dex_name.clone();
+            
+            // Clone the DEX for safe async usage
+            let dex_clone = dex.clone_box();
+            
+            let future = tokio::task::spawn(async move {
+                let result = dex_clone.get_quote(&params_clone).await;
+                (dex_name_clone, result)
+            });
+            
+            futures.push(future);
+        }
+        
+        drop(circuit_breakers); // Release lock
+        futures
     }
-}
 
-struct OptimizedRoute {
-    routes: Vec<RouteBreakdown>,
-    price_impact: f64,
-    gas_estimate: String,
-}
+    // 🚀 Optimal route selection algorithm
+    fn select_optimal_routes(&self, mut quotes: Vec<RouteBreakdown>) -> Vec<RouteBreakdown> {
+        // Sort by best output amount (descending)
+        quotes.sort_by(|a, b| {
+            let a_amount = a.amount_out.parse::<f64>().unwrap_or(0.0);
+            let b_amount = b.amount_out.parse::<f64>().unwrap_or(0.0);
+            b_amount.partial_cmp(&a_amount).unwrap_or(std::cmp::Ordering::Equal)
+        });
+        
+        // For now, return top 3 routes
+        // TODO: Implement more sophisticated route splitting algorithm
+        quotes.into_iter().take(3).collect()
+    }
 
-// Background task to update liquidity data
-pub async fn start_liquidity_updates(aggregator: Arc<DEXAggregator>) {
-    let mut interval = tokio::time::interval(Duration::from_secs(60));
-    
-    loop {
-        interval.tick().await;
-        aggregator.advanced_router.update_liquidity_data().await;
+    fn calculate_total_output(&self, routes: &[RouteBreakdown]) -> String {
+        if routes.is_empty() {
+            return "0".to_string();
+        }
+        
+        // For single route, return its output
+        if routes.len() == 1 {
+            return routes[0].amount_out.clone();
+        }
+        
+        // For multiple routes, take the best one for now
+        // TODO: Implement route splitting logic
+        routes[0].amount_out.clone()
+    }
+
+    // 🚀 Cache management
+    async fn get_cached_quote(&self, cache_key: &str) -> Option<RouteBreakdown> {
+        let cache = self.quote_cache.read().await;
+        if let Some(cached) = cache.get(cache_key) {
+            if !cached.is_expired() {
+                return Some(cached.quote.clone());
+            }
+        }
+        None
+    }
+
+    async fn cache_quote(&self, cache_key: &str, quote: RouteBreakdown, ttl: Duration) {
+        let mut cache = self.quote_cache.write().await;
+        cache.insert(cache_key.to_string(), CachedQuote {
+            quote,
+            timestamp: Instant::now(),
+            ttl,
+        });
+        
+        // Clean up expired entries (simple cleanup)
+        cache.retain(|_, v| !v.is_expired());
     }
 }

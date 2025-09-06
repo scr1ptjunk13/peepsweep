@@ -1,7 +1,58 @@
 use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use rust_decimal::Decimal;
 use uuid::Uuid;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum Chain {
+    Ethereum,
+    Polygon,
+    Arbitrum,
+    Optimism,
+    Base,
+    Avalanche,
+    BNB,
+    Fantom,
+}
+
+impl Chain {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Chain::Ethereum => "ethereum",
+            Chain::Polygon => "polygon",
+            Chain::Arbitrum => "arbitrum",
+            Chain::Optimism => "optimism",
+            Chain::Base => "base",
+            Chain::Avalanche => "avalanche",
+            Chain::BNB => "bnb",
+            Chain::Fantom => "fantom",
+        }
+    }
+    
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "ethereum" | "eth" => Some(Chain::Ethereum),
+            "polygon" | "matic" => Some(Chain::Polygon),
+            "arbitrum" | "arb" => Some(Chain::Arbitrum),
+            "optimism" | "op" => Some(Chain::Optimism),
+            "base" => Some(Chain::Base),
+            "avalanche" | "avax" => Some(Chain::Avalanche),
+            "bnb" | "bsc" => Some(Chain::BNB),
+            "fantom" | "ftm" => Some(Chain::Fantom),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DexQuote {
+    pub dex_name: String,
+    pub output_amount: String,
+    pub gas_estimate: u64,
+    pub slippage: f64,
+    pub price_impact: f64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BundleStatus {
