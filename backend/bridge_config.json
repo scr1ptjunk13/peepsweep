@@ -1,0 +1,165 @@
+{
+  "bridges": {
+    "hop_protocol": {
+      "enabled": true,
+      "api_key": null,
+      "api_url": "https://api.hop.exchange",
+      "timeout_seconds": 30,
+      "max_retries": 3,
+      "priority": 8,
+      "supported_chains": [1, 10, 42161, 137, 100, 42220],
+      "supported_tokens": ["ETH", "USDC", "USDT", "DAI"],
+      "fee_multiplier": 1.0,
+      "custom_headers": {}
+    },
+    "across_protocol": {
+      "enabled": true,
+      "api_key": null,
+      "api_url": "https://app.across.to/api",
+      "timeout_seconds": 30,
+      "max_retries": 3,
+      "priority": 9,
+      "supported_chains": [1, 10, 42161, 137, 8453, 59144, 324],
+      "supported_tokens": ["ETH", "USDC", "USDT", "DAI", "WBTC"],
+      "fee_multiplier": 1.0,
+      "custom_headers": {}
+    },
+    "stargate_finance": {
+      "enabled": true,
+      "api_key": null,
+      "api_url": "https://stargate.finance/api",
+      "timeout_seconds": 30,
+      "max_retries": 3,
+      "priority": 7,
+      "supported_chains": [1, 10, 42161, 137, 43114, 250, 56],
+      "supported_tokens": ["USDC", "USDT", "ETH"],
+      "fee_multiplier": 1.0,
+      "custom_headers": {}
+    },
+    "synapse_protocol": {
+      "enabled": true,
+      "api_key": null,
+      "api_url": "https://api.synapseprotocol.com",
+      "timeout_seconds": 30,
+      "max_retries": 3,
+      "priority": 6,
+      "supported_chains": [1, 10, 42161, 137, 43114, 250, 56, 8453],
+      "supported_tokens": ["USDC", "USDT", "DAI", "ETH"],
+      "fee_multiplier": 1.0,
+      "custom_headers": {}
+    },
+    "multichain": {
+      "enabled": true,
+      "api_key": null,
+      "api_url": "https://bridgeapi.anyswap.exchange",
+      "timeout_seconds": 45,
+      "max_retries": 2,
+      "priority": 5,
+      "supported_chains": [1, 10, 42161, 137, 43114, 250, 56, 8453, 42220, 100],
+      "supported_tokens": ["USDC", "USDT", "DAI", "ETH", "WBTC"],
+      "fee_multiplier": 1.0,
+      "custom_headers": {}
+    }
+  },
+  "chains": {
+    "1": {
+      "chain_id": 1,
+      "name": "Ethereum",
+      "rpc_url": "https://eth.llamarpc.com",
+      "explorer_url": "https://etherscan.io",
+      "native_token": "ETH",
+      "gas_price_multiplier": 1.1,
+      "confirmation_blocks": 12,
+      "enabled": true
+    },
+    "10": {
+      "chain_id": 10,
+      "name": "Optimism",
+      "rpc_url": "https://mainnet.optimism.io",
+      "explorer_url": "https://optimistic.etherscan.io",
+      "native_token": "ETH",
+      "gas_price_multiplier": 1.0,
+      "confirmation_blocks": 1,
+      "enabled": true
+    },
+    "42161": {
+      "chain_id": 42161,
+      "name": "Arbitrum One",
+      "rpc_url": "https://arb1.arbitrum.io/rpc",
+      "explorer_url": "https://arbiscan.io",
+      "native_token": "ETH",
+      "gas_price_multiplier": 1.0,
+      "confirmation_blocks": 1,
+      "enabled": true
+    },
+    "137": {
+      "chain_id": 137,
+      "name": "Polygon",
+      "rpc_url": "https://polygon-rpc.com",
+      "explorer_url": "https://polygonscan.com",
+      "native_token": "MATIC",
+      "gas_price_multiplier": 1.2,
+      "confirmation_blocks": 20,
+      "enabled": true
+    },
+    "43114": {
+      "chain_id": 43114,
+      "name": "Avalanche",
+      "rpc_url": "https://api.avax.network/ext/bc/C/rpc",
+      "explorer_url": "https://snowtrace.io",
+      "native_token": "AVAX",
+      "gas_price_multiplier": 1.0,
+      "confirmation_blocks": 1,
+      "enabled": true
+    },
+    "250": {
+      "chain_id": 250,
+      "name": "Fantom",
+      "rpc_url": "https://rpc.ftm.tools",
+      "explorer_url": "https://ftmscan.com",
+      "native_token": "FTM",
+      "gas_price_multiplier": 1.0,
+      "confirmation_blocks": 1,
+      "enabled": true
+    },
+    "56": {
+      "chain_id": 56,
+      "name": "BNB Smart Chain",
+      "rpc_url": "https://bsc-dataseed.binance.org",
+      "explorer_url": "https://bscscan.com",
+      "native_token": "BNB",
+      "gas_price_multiplier": 1.0,
+      "confirmation_blocks": 3,
+      "enabled": true
+    },
+    "8453": {
+      "chain_id": 8453,
+      "name": "Base",
+      "rpc_url": "https://mainnet.base.org",
+      "explorer_url": "https://basescan.org",
+      "native_token": "ETH",
+      "gas_price_multiplier": 1.0,
+      "confirmation_blocks": 1,
+      "enabled": true
+    }
+  },
+  "monitoring": {
+    "enabled": true,
+    "health_check_interval_seconds": 60,
+    "metrics_retention_hours": 168,
+    "alert_webhooks": [],
+    "log_level": "info"
+  },
+  "rate_limits": {
+    "requests_per_minute": 100,
+    "burst_size": 20,
+    "per_bridge_limits": {}
+  },
+  "security": {
+    "require_api_key": false,
+    "allowed_origins": ["*"],
+    "max_amount_per_transfer": "1000000000000000000000",
+    "blacklisted_addresses": [],
+    "enable_transaction_simulation": true
+  }
+}

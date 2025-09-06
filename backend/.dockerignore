@@ -1,0 +1,15 @@
+# Exclude target directory except for release binary
+target/*
+!target/release/
+!target/release/bralaladex-backend
+.env
+*.log
+.git/
+node_modules/
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+*.swo
+.vscode/
+.idea/

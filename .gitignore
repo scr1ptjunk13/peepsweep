@@ -1,0 +1,234 @@
+# ==============================================================================
+# RUST PROJECT - OPTIMIZED .gitignore for Reduced Repository Size
+# ==============================================================================
+
+# Rust Build Artifacts (CRITICAL - These are huge!)
+target/
+**/*.rs.bk
+*.pdb
+Cargo.lock  # Uncommented - lock files can be large and auto-generated
+
+# Rust-specific temporary files
+**/*.tmp
+**/*.temp
+**/*.orig
+**/*.rej
+
+# ==============================================================================
+# NODE.JS / FRONTEND (Only if using frontend)
+# ==============================================================================
+
+# Node modules (MASSIVE size reduction)
+node_modules/
+.npm/
+.yarn/
+.pnpm-store/
+.pnpm-debug.log*
+
+# Package manager artifacts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Frontend build outputs
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+.turbo/
+.vercel/
+.netlify/
+storybook-static/
+public/build/
+
+# ==============================================================================
+# ENVIRONMENT & SECRETS (Security + Size)
+# ==============================================================================
+
+# Environment files (can contain secrets + large configs)
+.env
+.env.*
+!.env.example
+
+# ==============================================================================
+# IDE & EDITOR FILES (Reduce clutter)
+# ==============================================================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# IntelliJ/CLion
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Vim/Neovim
+*.swp
+*.swo
+*.swn
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# ==============================================================================
+# OPERATING SYSTEM FILES (Reduce OS-specific clutter)
+# ==============================================================================
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon?
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ==============================================================================
+# LOGS & RUNTIME DATA (Can grow very large)
+# ==============================================================================
+
+# Log files
+*.log
+logs/
+*.log.*
+log/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+.nyc_output/
+
+# ==============================================================================
+# DATABASES & CACHE (Large binary files)
+# ==============================================================================
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+dump.rdb
+
+# Cache directories
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+*.cache
+
+# ==============================================================================
+# TESTING & COVERAGE (Can be large)
+# ==============================================================================
+
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output/
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.pytest_cache/
+nosetests.xml
+coverage.xml
+
+# ==============================================================================
+# TEMPORARY & BACKUP FILES (Cleanup)
+# ==============================================================================
+
+# Temporary folders
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+*~
+
+# Load testing results
+load_test_results/
+*.jmx.log
+
+# ==============================================================================
+# DOCKER & DEPLOYMENT (Optional)
+# ==============================================================================
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# ==============================================================================
+# RUST-SPECIFIC ADDITIONS (Performance & Size)
+# ==============================================================================
+
+# Rust analyzer cache
+.rust-analyzer/
+
+# Flamegraph profiling
+flamegraph.svg
+perf.data*
+
+# Criterion benchmarks
+target/criterion/
+
+# LLVM coverage
+*.profraw
+*.profdata
+
+# ==============================================================================
+# PROJECT-SPECIFIC (HyperDEX)
+# ==============================================================================
+
+# Large research/documentation artifacts
+*.pdf
+*.docx
+research_data/
+market_data/
+
+# Large test data
+test_data/
+mock_data/
+sample_data/
+
+# Performance benchmarks
+benchmark_results/
+performance_logs/

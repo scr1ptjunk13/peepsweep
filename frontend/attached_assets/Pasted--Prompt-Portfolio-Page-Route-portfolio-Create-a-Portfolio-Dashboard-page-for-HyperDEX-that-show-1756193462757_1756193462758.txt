@@ -1,0 +1,57 @@
+📊 Prompt: Portfolio Page
+Route: /portfolio
+Create a Portfolio Dashboard page for HyperDEX that shows users their complete trading history and performance.
+
+LAYOUT STRUCTURE:
+- Same header as main app (HyperDEX logo, network selector, wallet connection)
+- Main content area with portfolio overview cards
+- Transaction history table below
+- Right sidebar with performance insights
+- Same dark theme and electric green accents
+
+PORTFOLIO OVERVIEW (Top Cards):
+- Total Portfolio Value: Large number with 24h change percentage
+- Total P&L: Profit/loss with green/red color coding
+- Success Rate: Percentage of successful trades with pulse effect
+- Gas Saved: Total gas savings with electric green highlight
+- Active Positions: Number of current holdings
+
+TRANSACTION HISTORY TABLE:
+Headers: Date, Pair, Type, Amount, Price, Status, Speed
+- Filterable by token pair, date range, transaction type
+- Sortable columns with smooth animations
+- Status indicators: Success (green), Failed (red), Pending (yellow)
+- Speed column showing quote generation time for each trade
+- Pagination with smooth transitions
+- Search functionality
+
+TRANSACTION ROW DESIGN:
+- Dark background with subtle hover effects
+- Token logos with pair display (ETH → USDC)
+- Amount in large, bold numbers
+- USD value in smaller text below
+- Speed metrics in electric blue
+- Expandable rows for transaction details
+
+PERFORMANCE SIDEBAR:
+- Best performing pairs (24h)
+- Recent activity feed
+- Speed achievements ("Fastest trade: 12ms")
+- Monthly trading summary
+- Gas efficiency metrics
+
+VISUAL DESIGN:
+- Same electric color scheme as main app
+- Smooth animations for all interactions
+- Loading skeletons for async data
+- Empty state with encouraging message
+- Mobile responsive design
+
+INTERACTIONS:
+- Click transaction row to expand details
+- Filter dropdown with smooth animations
+- Export functionality (CSV download)
+- Date range picker
+- Token pair filtering
+
+Make users feel like they're viewing a professional trading dashboard with all their performance data beautifully organized.

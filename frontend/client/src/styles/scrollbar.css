@@ -1,0 +1,59 @@
+/* Modern scrollbar styles for HyperDEX */
+
+/* Webkit scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.5); /* gray-800 with opacity */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #00ff88, #00ccff); /* electric-lime to nuclear-blue gradient */
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #00ff88, #0099ff);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+}
+
+::-webkit-scrollbar-corner {
+  background: rgba(31, 41, 55, 0.5);
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #00ff88 rgba(31, 41, 55, 0.5);
+}
+
+/* Custom scrollbar for react-window virtual list */
+.react-window-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #00ff88 rgba(31, 41, 55, 0.5);
+}
+
+.react-window-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.react-window-scrollbar::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.3);
+  border-radius: 4px;
+}
+
+.react-window-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #00ff88, #00ccff);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.react-window-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #00ff88, #0099ff);
+  box-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+}
