@@ -75,6 +75,23 @@ impl ProviderCache {
             "https://base-pokt.nodies.app".to_string(),
         ]);
         
+        // BSC (Binance Smart Chain) RPCs - PancakeSwap's home chain
+        rpc_endpoints.insert("bsc".to_string(), vec![
+            "https://bsc.drpc.org".to_string(),
+            "https://rpc.ankr.com/bsc".to_string(),
+            "https://bsc.publicnode.com".to_string(),
+            "https://bsc-dataseed.binance.org".to_string(),
+            "https://bsc.llamarpc.com".to_string(),
+            "https://binance.nodereal.io".to_string(),
+        ]);
+        
+        // zkSync Era RPCs
+        rpc_endpoints.insert("zksync".to_string(), vec![
+            "https://mainnet.era.zksync.io".to_string(),
+            "https://zksync.drpc.org".to_string(),
+            "https://zksync-era.rpc.thirdweb.com".to_string(),
+        ]);
+        
         // Avalanche RPCs
         rpc_endpoints.insert("avalanche".to_string(), vec![
             "https://avalanche.drpc.org".to_string(),

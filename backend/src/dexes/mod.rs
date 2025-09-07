@@ -5,11 +5,13 @@ pub mod utils;
 pub mod velodrome;
 pub mod uniswap_v3;
 pub mod uniswap_v2;
+pub mod pancakeswap_v2;
 
 // DEX IMPORTS
 pub use velodrome::VelodromeDex;
 pub use uniswap_v3::UniswapV3Dex;
 pub use uniswap_v2::UniswapV2Dex;
+pub use pancakeswap_v2::PancakeSwapV2Dex;
 
 use crate::types::{QuoteParams, RouteBreakdown, SwapParams};
 use async_trait::async_trait;
