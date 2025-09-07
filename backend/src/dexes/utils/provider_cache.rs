@@ -92,6 +92,16 @@ impl ProviderCache {
             "https://zksync-era.rpc.thirdweb.com".to_string(),
         ]);
         
+        // Fantom Opera RPCs - SpiritSwap's home chain
+        rpc_endpoints.insert("fantom".to_string(), vec![
+            "https://rpc.ftm.tools".to_string(),
+            "https://rpc.ankr.com/fantom".to_string(),
+            "https://fantom.drpc.org".to_string(),
+            "https://fantom.publicnode.com".to_string(),
+            "https://rpc.fantom.network".to_string(),
+            "https://fantom-pokt.nodies.app".to_string(),
+        ]);
+        
         // Avalanche RPCs
         rpc_endpoints.insert("avalanche".to_string(), vec![
             "https://avalanche.drpc.org".to_string(),
