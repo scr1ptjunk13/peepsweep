@@ -207,6 +207,17 @@ impl DexUtils {
             _ => Err(DexError::UnsupportedChain(format!("No WETH for chain: {}", chain)))
         }
     }
+
+    /// Parse token address from optional string with validation
+    pub fn parse_token_address(token_address_opt: &Option<String>, field_name: &str) -> Result<Address, DexError> {
+        match token_address_opt {
+            Some(addr_str) => {
+                Address::from_str(addr_str)
+                    .map_err(|_| DexError::InvalidAddress(format!("Invalid {} address: {}", field_name, addr_str)))
+            }
+            None => Err(DexError::InvalidInput(format!("Missing {} address", field_name)))
+        }
+    }
 }
 
 #[cfg(test)]

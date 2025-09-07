@@ -1,11 +1,13 @@
 // Universal DEX Framework
 pub mod utils;
 
-// ONLY VELODROME DEX
+// DEX MODULES
 pub mod velodrome;
+pub mod uniswap_v3;
 
-// ONLY VELODROME IMPORT
+// DEX IMPORTS
 pub use velodrome::VelodromeDex;
+pub use uniswap_v3::UniswapV3Dex;
 
 use crate::types::{QuoteParams, RouteBreakdown, SwapParams};
 use async_trait::async_trait;
