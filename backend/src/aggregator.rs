@@ -1,5 +1,5 @@
 use crate::types::{QuoteParams, QuoteResponse, RouteBreakdown, SavingsComparison};
-use crate::dexes::{DexIntegration, DexError, VelodromeDex, ApeSwapDex};
+use crate::dexes::{DexIntegration, DexError, VelodromeDex, ApeSwapDex, SushiSwapV2Dex};
 use redis::Client as RedisClient;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
@@ -108,9 +108,14 @@ impl DEXAggregator {
         dexes.push(Box::new(apeswap));
         info!("✅ ApeSwap initialized successfully");
         
+        // Initialize SushiSwap V2 DEX
+        info!("🔄 Initializing SushiSwap V2 (Ethereum + Polygon + Arbitrum + Base)...");
+        let sushiswap = SushiSwapV2Dex::new();
+        dexes.push(Box::new(sushiswap));
+        info!("✅ SushiSwap V2 initialized successfully");
+        
         // TODO: Add more DEXes here for 25+ support
         // dexes.push(Box::new(UniswapV3Dex::new()));
-        // dexes.push(Box::new(SushiSwapDex::new()));
         // dexes.push(Box::new(CurveDex::new()));
         // etc...
         
