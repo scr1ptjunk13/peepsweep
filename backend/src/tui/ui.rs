@@ -33,7 +33,7 @@ pub fn render_ui(f: &mut Frame, app: &App) {
 }
 
 fn render_title(f: &mut Frame, area: Rect) {
-    let title = Paragraph::new("🚀 HyperDEX - Multi-Chain DEX Aggregator")
+    let title = Paragraph::new("PeepSweep - Multi-Chain DEX Aggregator")
         .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL));
@@ -194,7 +194,7 @@ fn render_results(f: &mut Frame, area: Rect, app: &App) {
 
     // Create table with quotes
     let quotes_block = Block::default()
-        .title("🚀 Multi-Chain DEX Aggregator - Real-Time Quotes")
+        .title("Multi-Chain DEX Aggregator - Real-Time Quotes")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Blue));
 
@@ -204,16 +204,16 @@ fn render_results(f: &mut Frame, area: Rect, app: &App) {
 
     let rows: Vec<Row> = app.quotes.iter().enumerate().map(|(i, quote)| {
         let (style, rank_symbol) = match i {
-            0 => (Style::default().fg(Color::Green).add_modifier(Modifier::BOLD), "🥇"), // Best quote
-            1 => (Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD), "🥈"), // Second best
-            2 => (Style::default().fg(Color::Magenta), "🥉"), // Third best
-            _ => (Style::default().fg(Color::White), "📊"), // Others
+            0 => (Style::default().fg(Color::Green).add_modifier(Modifier::BOLD), "#1".to_string()), // Best quote
+            1 => (Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD), "#2".to_string()), // Second best
+            2 => (Style::default().fg(Color::Magenta), "#3".to_string()), // Third best
+            _ => (Style::default().fg(Color::White), format!("#{}", i + 1)), // Others
         };
         
-        let status = if i < 3 { "✅ TOP" } else { "📈 OK" };
+        let status = if i < 3 { "TOP" } else { "OK" };
         
         Row::new(vec![
-            rank_symbol.to_string(),
+            rank_symbol,
             quote.dex_name.clone(),
             format!("{} {}", quote.output_amount, app.token_to),
             format!("{} gas", quote.gas_estimate),

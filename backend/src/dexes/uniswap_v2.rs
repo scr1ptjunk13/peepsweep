@@ -62,9 +62,28 @@ impl UniswapV2Dex {
     async fn get_uniswap_v2_quote(&self, params: &QuoteParams) -> Result<U256, DexError> {
         let chain = params.chain.as_deref().unwrap_or("ethereum");
         
-        // Use framework helpers - no manual parsing!
-        let token_in_addr = DexUtils::parse_token_address(&params.token_in_address, "token_in")?;
-        let token_out_addr = DexUtils::parse_token_address(&params.token_out_address, "token_out")?;
+        // Handle ETH → WETH conversion like SushiSwap
+        let mut token_in_addr_str = params.token_in_address.as_deref().unwrap_or("");
+        let mut token_out_addr_str = params.token_out_address.as_deref().unwrap_or("");
+        
+        // Convert ETH to WETH for Uniswap V2
+        let weth_addr = match chain {
+            "ethereum" => "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+            "polygon" => "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270", // WMATIC
+            "arbitrum" => "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
+            "base" => "0x4200000000000000000000000000000000000006",
+            _ => return Err(DexError::UnsupportedChain(chain.to_string())),
+        };
+        
+        if token_in_addr_str == "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" {
+            token_in_addr_str = weth_addr;
+        }
+        if token_out_addr_str == "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" {
+            token_out_addr_str = weth_addr;
+        }
+        
+        let token_in_addr = DexUtils::parse_token_address(&Some(token_in_addr_str.to_string()), "token_in")?;
+        let token_out_addr = DexUtils::parse_token_address(&Some(token_out_addr_str.to_string()), "token_out")?;
         let amount_in_wei = DexUtils::parse_amount_safe(&params.amount_in, params.token_in_decimals.unwrap_or(18))?;
 
         // Framework provider management

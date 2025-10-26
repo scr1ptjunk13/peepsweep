@@ -1,5 +1,5 @@
 use crate::types::{QuoteParams, QuoteResponse, RouteBreakdown, SavingsComparison};
-use crate::dexes::{DexIntegration, DexError, VelodromeDex, ApeSwapDex, SushiSwapV2Dex};
+use crate::dexes::{DexIntegration, DexError, VelodromeDex, ApeSwapDex, SushiSwapV2Dex, UniswapV2Dex, UniswapV3Dex, PancakeSwapV2Dex, SpiritSwapV2Dex, AerodromeDex};
 use redis::Client as RedisClient;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
@@ -108,16 +108,31 @@ impl DEXAggregator {
         dexes.push(Box::new(apeswap));
         info!("✅ ApeSwap initialized successfully");
         
-        // Initialize SushiSwap V2 DEX
         info!("🔄 Initializing SushiSwap V2 (Ethereum + Polygon + Arbitrum + Base)...");
         let sushiswap = SushiSwapV2Dex::new();
         dexes.push(Box::new(sushiswap));
         info!("✅ SushiSwap V2 initialized successfully");
         
-        // TODO: Add more DEXes here for 25+ support
-        // dexes.push(Box::new(UniswapV3Dex::new()));
-        // dexes.push(Box::new(CurveDex::new()));
-        // etc...
+        // Initialize Uniswap V2 DEX - ETHEREUM KING 👑
+        info!("🔄 Initializing Uniswap V2 (Ethereum + Multi-Chain)...");
+        let uniswap_v2 = UniswapV2Dex::new();
+        dexes.push(Box::new(uniswap_v2));
+        info!("✅ Uniswap V2 initialized successfully");
+        
+        // Initialize Uniswap V3 DEX - NEXT GEN ETHEREUM 🚀
+        info!("🔄 Initializing Uniswap V3 (Ethereum + Polygon + Arbitrum)...");
+        let uniswap_v3 = UniswapV3Dex::new();
+        dexes.push(Box::new(uniswap_v3));
+        info!("✅ Uniswap V3 initialized successfully");
+        
+        // TODO: Add more DEXes gradually after testing
+        // Initialize PancakeSwap V2 DEX - BSC POWERHOUSE 🥞
+        // info!("🔄 Initializing PancakeSwap V2 (BSC + Multi-Chain)...");
+        // let pancakeswap_v2 = PancakeSwapV2Dex::new();
+        // dexes.push(Box::new(pancakeswap_v2));
+        // info!("✅ PancakeSwap V2 initialized successfully");
+        
+        // 🎯 TOTAL DEX ARMY ASSEMBLED! 🎯
         
         info!("🎯 DEX Aggregator initialized with {} DEXes", dexes.len());
         
@@ -161,7 +176,7 @@ impl DEXAggregator {
         let quote_futures = self.create_concurrent_quote_futures(&params).await;
         
         // Execute all DEX queries concurrently with timeout
-        let timeout_duration = Duration::from_millis(2000); // 2 second timeout
+        let timeout_duration = Duration::from_millis(10000); // 10 second timeout - RPC calls can be slow
         let results = tokio::time::timeout(timeout_duration, join_all(quote_futures)).await
             .map_err(|_| AggregatorError::AllDexesFailed)?;
         
@@ -241,10 +256,13 @@ impl DEXAggregator {
             
             // Check if DEX supports this chain
             let chain = params.chain.as_deref().unwrap_or("ethereum");
-            if !dex.get_supported_chains().contains(&chain) {
-                debug!("⚠️ {} doesn't support chain {}, skipping", dex_name, chain);
+            let supported_chains = dex.get_supported_chains();
+            debug!("DEX {} supports chains: {:?}, checking for: {}", dex_name, supported_chains, chain);
+            if !supported_chains.contains(&chain) {
+                debug!("DEX {} doesn't support chain {}, skipping", dex_name, chain);
                 continue;
             }
+            debug!("DEX {} supports chain {}, adding to futures", dex_name, chain);
             
             // Create concurrent future for this DEX - REAL API CALL
             let params_clone = params.clone();
