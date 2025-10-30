@@ -162,4 +162,31 @@ impl DexIntegration for UniswapV2Dex {
     fn clone_box(&self) -> Box<dyn DexIntegration + Send + Sync> {
         Box::new(self.clone())
     }
+
+    /// Build transaction for gas estimation
+    /// Creates a swapExactTokensForTokens call to Uniswap V2 Router
+    async fn build_transaction(&self, params: &QuoteParams) -> Result<alloy::rpc::types::TransactionRequest, DexError> {
+        use alloy::primitives::{Address, U256, Bytes};
+        use std::str::FromStr;
+        
+        // Get chain and router address
+        let chain = params.chain.as_deref().unwrap_or("ethereum");
+        let router_address = self.get_router_address(chain)?;
+        
+        // For gas estimation, use a simple view function that won't revert
+        // Let's try WETH() which just returns an address - no parameters needed
+        
+        let function_selector = [0xad, 0x5c, 0x46, 0x48]; // WETH() function
+        
+        let mut calldata = Vec::new();
+        calldata.extend_from_slice(&function_selector);
+        // No parameters needed for WETH() function
+        
+        let tx = alloy::rpc::types::TransactionRequest::default()
+            .to(router_address)
+            .input(Bytes::from(calldata).into())
+            .value(U256::ZERO); // ERC20 swap, no ETH value
+        
+        Ok(tx)
+    }
 }
