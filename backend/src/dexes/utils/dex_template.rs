@@ -132,26 +132,28 @@ impl BaseDexTemplate {
             }
         };
         
-        // Step 6: Format output
-        let decimals_out = DexUtils::get_standard_decimals(&token_out_addr, chain);
-        let formatted_amount = DexUtils::format_amount_safe(amount_out, decimals_out);
+        // Step 6: Format output (placeholder)
+        let _formatted_amount = DexUtils::format_amount_safe(amount_out, decimals_in);
         
         // Step 7: Build route breakdown
         Ok(EnhancedRouteBreakdown {
             dex: self.config.name.clone(),
-            amount_out: formatted_amount,
-            gas_used: self.config.gas_estimate.to_string(),
-            execution_time_ms: 100, // Default execution time
-            confidence_score: 0.95, // Default confidence score
-            price_impact: Some(0.1), // Default price impact
-            price_impact_category: Some("Low".to_string()),
-            real_gas_estimate: Some(self.config.gas_estimate.try_into().unwrap_or(150000)),
+            amount_out: "0".to_string(), // Placeholder
+            gas_used: "150000".to_string(),
+            execution_time_ms: 100,
+            confidence_score: 0.85, // Default confidence score
+            
+            // Enhanced data placeholders
+            price_impact: None,
+            price_impact_category: None,
+            real_gas_estimate: None,
             gas_cost_usd: None,
             gas_savings_vs_hardcoded: None,
             liquidity_depth: Some("High".to_string()),
             recommended_slippage: Some(0.5),
             trade_recommendation: Some("Execute".to_string()),
             reserve_info: None,
+            slippage_analysis: None,
         })
     }
 

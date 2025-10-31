@@ -1,7 +1,8 @@
 use crate::dexes::{DexIntegration, DexError};
-use crate::types::{QuoteParams, RouteBreakdown, SwapParams, EnhancedRouteBreakdown, ReserveInfo};
+use crate::types::{QuoteParams, RouteBreakdown, SwapParams, EnhancedRouteBreakdown, ReserveInfo, SlippageBreakdown};
 use crate::price_impact::PriceImpactCalculator;
 use crate::gas::GasEstimator;
+use crate::slippage::SlippageEstimator;
 use crate::dexes::utils::{
     dex_template::{DexConfig, ChainConfig, DexConfigBuilder},
     DexUtils, ProviderCache
@@ -30,6 +31,7 @@ pub struct UniswapV2Dex {
     config: DexConfig,
     price_impact_calculator: Option<PriceImpactCalculator>,
     gas_estimator: Option<GasEstimator>,
+    slippage_estimator: Option<SlippageEstimator>,
     provider_cache: ProviderCache,
 }
 
@@ -61,14 +63,17 @@ impl UniswapV2Dex {
             config,
             price_impact_calculator: None,
             gas_estimator: None,
+            slippage_estimator: None,
             provider_cache: ProviderCache::new(),
         }
     }
 
     /// Set the price impact calculator and gas estimator for enhanced quotes
     pub fn with_calculators(mut self, price_impact_calculator: PriceImpactCalculator, gas_estimator: GasEstimator) -> Self {
+        let slippage_estimator = SlippageEstimator::new(self.provider_cache.clone().into());
         self.price_impact_calculator = Some(price_impact_calculator);
         self.gas_estimator = Some(gas_estimator);
+        self.slippage_estimator = Some(slippage_estimator);
         self
     }
 
@@ -79,8 +84,8 @@ impl UniswapV2Dex {
         // 1. Get basic quote
         let basic_quote = self.get_quote(params).await?;
         
-        // 2. Calculate price impact (if calculator available)
-        let (price_impact, price_impact_category, reserve_info) = if let Some(calculator) = &self.price_impact_calculator {
+        // 2. Calculate price impact and get reserves (if calculator available)
+        let (price_impact, price_impact_category, reserve_info, reserve0, reserve1) = if let Some(calculator) = &self.price_impact_calculator {
             match calculator.calculate_trade_impact(params).await {
                 Ok(impact) => {
                     let category = PriceImpactCalculator::categorize_impact(impact);
@@ -90,9 +95,9 @@ impl UniswapV2Dex {
                     let token_out = params.token_out_address.as_deref().unwrap_or("");
                     let chain = params.chain.as_deref().unwrap_or("ethereum");
                     
-                    let reserve_info = match calculator.get_v2_reserves(token_in, token_out, chain).await {
+                    let (reserves_result, reserve_info) = match calculator.get_v2_reserves(token_in, token_out, chain).await {
                         Ok((reserve0, reserve1, timestamp)) => {
-                            Some(ReserveInfo {
+                            let reserve_info = Some(ReserveInfo {
                                 reserve0: reserve0.to_string(),
                                 reserve1: reserve1.to_string(),
                                 reserve0_formatted: Self::format_reserve(reserve0, 6), // Assume USDC
@@ -100,17 +105,19 @@ impl UniswapV2Dex {
                                 total_liquidity_usd: None, // TODO: Calculate
                                 pair_address: "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc".to_string(), // TODO: Get from calculator
                                 last_updated: timestamp,
-                            })
+                            });
+                            (Some((reserve0, reserve1)), reserve_info)
                         }
-                        Err(_) => None,
+                        Err(_) => (None, None),
                     };
                     
-                    (Some(impact), Some(category.to_string()), reserve_info)
+                    (Some(impact), Some(category.to_string()), reserve_info, 
+                     reserves_result.map(|(r0, _)| r0), reserves_result.map(|(_, r1)| r1))
                 }
-                Err(_) => (None, None, None),
+                Err(_) => (None, None, None, None, None),
             }
         } else {
-            (None, None, None)
+            (None, None, None, None, None)
         };
         
         // 3. Get real gas estimate (if estimator available)
@@ -133,11 +140,36 @@ impl UniswapV2Dex {
             (None, None, None)
         };
         
-        // 4. Generate recommendations
-        let (recommended_slippage, trade_recommendation, liquidity_depth) = Self::generate_recommendations(
-            price_impact, 
-            reserve_info.as_ref()
-        );
+        // 4. Calculate advanced slippage analysis (if slippage estimator available)
+        let slippage_analysis = if let (Some(slippage_estimator), Some(impact), Some(r0), Some(r1)) = 
+            (&self.slippage_estimator, price_impact, reserve0, reserve1) {
+            match slippage_estimator.analyze_slippage(params, impact, r0, r1, "UniswapV2").await {
+                Ok(analysis) => Some(SlippageBreakdown {
+                    recommended_slippage: analysis.recommended_slippage,
+                    minimum_slippage: analysis.minimum_slippage,
+                    conservative_slippage: analysis.conservative_slippage,
+                    aggressive_slippage: analysis.aggressive_slippage,
+                    liquidity_score: analysis.liquidity_score,
+                    volatility_factor: analysis.volatility_factor,
+                    gas_pressure_factor: analysis.gas_pressure_factor,
+                    confidence_level: analysis.confidence_level,
+                    reasoning: analysis.reasoning,
+                }),
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
+        // 5. Generate basic recommendations (fallback)
+        let (recommended_slippage, trade_recommendation, liquidity_depth) = if let Some(ref analysis) = slippage_analysis {
+            (Some(analysis.recommended_slippage), 
+             Self::generate_trade_recommendation_from_analysis(analysis),
+             Self::generate_liquidity_depth_from_analysis(analysis))
+        } else {
+            let (basic_slippage, basic_recommendation, basic_liquidity) = Self::generate_recommendations(price_impact, reserve_info.as_ref());
+            (Some(basic_slippage), basic_recommendation, basic_liquidity)
+        };
         
         let execution_time = start_time.elapsed().as_millis() as u64;
         
@@ -155,9 +187,12 @@ impl UniswapV2Dex {
             gas_cost_usd,
             gas_savings_vs_hardcoded: gas_savings,
             liquidity_depth: Some(liquidity_depth),
-            recommended_slippage: Some(recommended_slippage),
+            recommended_slippage,
             trade_recommendation: Some(trade_recommendation),
             reserve_info,
+            
+            // NEW: Advanced slippage analysis
+            slippage_analysis,
         })
     }
     
@@ -203,6 +238,40 @@ impl UniswapV2Dex {
         }.to_string();
         
         (recommended_slippage, trade_recommendation, liquidity_depth)
+    }
+    
+    /// Generate trade recommendation from advanced slippage analysis
+    fn generate_trade_recommendation_from_analysis(analysis: &SlippageBreakdown) -> String {
+        if analysis.confidence_level < 0.3 {
+            "Avoid - Low confidence in estimate".to_string()
+        } else if analysis.recommended_slippage > 10.0 {
+            "Avoid - Extremely high slippage expected".to_string()
+        } else if analysis.recommended_slippage > 5.0 {
+            "Split trade - High slippage risk".to_string()
+        } else if analysis.recommended_slippage > 2.0 {
+            "Consider splitting - Medium slippage risk".to_string()
+        } else if analysis.recommended_slippage > 1.0 {
+            "Execute with caution - Some slippage expected".to_string()
+        } else {
+            "Execute - Low slippage expected".to_string()
+        }
+    }
+    
+    /// Generate liquidity depth description from slippage analysis
+    fn generate_liquidity_depth_from_analysis(analysis: &SlippageBreakdown) -> String {
+        if analysis.liquidity_score > 90.0 {
+            "Excellent".to_string()
+        } else if analysis.liquidity_score > 75.0 {
+            "Very High".to_string()
+        } else if analysis.liquidity_score > 60.0 {
+            "High".to_string()
+        } else if analysis.liquidity_score > 40.0 {
+            "Medium".to_string()
+        } else if analysis.liquidity_score > 20.0 {
+            "Low".to_string()
+        } else {
+            "Very Low".to_string()
+        }
     }
 
     async fn get_uniswap_v2_quote(&self, params: &QuoteParams) -> Result<U256, DexError> {

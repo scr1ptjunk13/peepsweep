@@ -60,6 +60,22 @@ pub struct EnhancedRouteBreakdown {
     pub recommended_slippage: Option<f64>,   // Recommended slippage %
     pub trade_recommendation: Option<String>, // "Execute", "Split", "Avoid"
     pub reserve_info: Option<ReserveInfo>,   // Reserve details
+    
+    // NEW: Advanced slippage analysis
+    pub slippage_analysis: Option<SlippageBreakdown>, // Detailed slippage breakdown
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SlippageBreakdown {
+    pub recommended_slippage: f64,      // Final recommended slippage %
+    pub minimum_slippage: f64,          // Absolute minimum based on price impact
+    pub conservative_slippage: f64,     // Conservative estimate for safety
+    pub aggressive_slippage: f64,       // Aggressive estimate for speed
+    pub liquidity_score: f64,           // 0-100 liquidity depth score
+    pub volatility_factor: f64,         // Market volatility multiplier
+    pub gas_pressure_factor: f64,       // Gas price impact on slippage
+    pub confidence_level: f64,          // Confidence in the estimate (0-1)
+    pub reasoning: String,              // Human-readable explanation
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

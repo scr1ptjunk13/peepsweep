@@ -98,6 +98,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("   Pair: {}", reserve_info.pair_address);
             }
             
+            // NEW: Advanced slippage analysis
+            if let Some(slippage_analysis) = &enhanced_quote.slippage_analysis {
+                println!();
+                println!("🎯 ADVANCED SLIPPAGE ANALYSIS:");
+                println!("   Recommended: {:.2}%", slippage_analysis.recommended_slippage);
+                println!("   Minimum: {:.2}%", slippage_analysis.minimum_slippage);
+                println!("   Conservative: {:.2}%", slippage_analysis.conservative_slippage);
+                println!("   Aggressive: {:.2}%", slippage_analysis.aggressive_slippage);
+                println!("   Liquidity Score: {:.1}/100", slippage_analysis.liquidity_score);
+                println!("   Volatility Factor: {:.2}x", slippage_analysis.volatility_factor);
+                println!("   Gas Pressure: {:.2}x", slippage_analysis.gas_pressure_factor);
+                println!("   Confidence: {:.1}%", slippage_analysis.confidence_level * 100.0);
+                println!("   Reasoning: {}", slippage_analysis.reasoning);
+            }
+            
+            println!();
             println!("   Execution Time: {}ms", enhanced_quote.execution_time_ms);
         }
         Err(e) => {
