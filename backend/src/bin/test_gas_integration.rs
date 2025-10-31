@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let provider_cache = Arc::new(ProviderCache::new());
     let gas_estimator = GasEstimator::new(provider_cache.clone());
     let price_impact_calculator = PriceImpactCalculator::new(provider_cache.clone());
-    let uniswap_v2 = UniswapV2Dex::new();
+    let uniswap_v2 = UniswapV2Dex::new().with_calculators(price_impact_calculator.clone(), gas_estimator.clone());
     
     // Test parameters: 1 ETH → USDC on Ethereum (REAL ADDRESSES)
     let params = QuoteParams {
@@ -56,25 +56,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
 
-    // Step 1.5: Test price impact calculation
-    println!("📊 Step 1.5: Calculating price impact...");
-    match price_impact_calculator.calculate_trade_impact(&params).await {
-        Ok(impact) => {
-            println!("✅ Price impact calculated:");
-            println!("   Impact: {:.4}%", impact);
-            println!("   Category: {}", PriceImpactCalculator::categorize_impact(impact));
+    // Step 1.5: Test ENHANCED QUOTE (All-in-One)
+    println!("🚀 Step 1.5: Getting ENHANCED QUOTE (All-in-One)...");
+    match uniswap_v2.get_enhanced_quote(&params).await {
+        Ok(enhanced_quote) => {
+            println!("✅ Enhanced quote successful:");
+            println!("   DEX: {}", enhanced_quote.dex);
+            println!("   Amount Out: {} USDC", enhanced_quote.amount_out);
             
-            if impact < 1.0 {
-                println!("   ✅ Low impact trade - good for execution");
-            } else if impact < 3.0 {
-                println!("   ⚠️  Medium impact - consider splitting the trade");
-            } else {
-                println!("   🚨 High impact - definitely split this trade!");
+            if let Some(impact) = enhanced_quote.price_impact {
+                println!("   Price Impact: {:.4}%", impact);
+                if let Some(category) = &enhanced_quote.price_impact_category {
+                    println!("   Impact Category: {}", category);
+                }
             }
+            
+            if let Some(real_gas) = enhanced_quote.real_gas_estimate {
+                println!("   Real Gas Estimate: {} units", real_gas);
+                if let Some(cost) = enhanced_quote.gas_cost_usd {
+                    println!("   Gas Cost: ${:.2}", cost);
+                }
+                if let Some(savings) = enhanced_quote.gas_savings_vs_hardcoded {
+                    println!("   Gas Savings: {:.1}%", savings);
+                }
+            }
+            
+            if let Some(recommendation) = &enhanced_quote.trade_recommendation {
+                println!("   Recommendation: {}", recommendation);
+            }
+            
+            if let Some(slippage) = enhanced_quote.recommended_slippage {
+                println!("   Recommended Slippage: {:.1}%", slippage);
+            }
+            
+            if let Some(liquidity) = &enhanced_quote.liquidity_depth {
+                println!("   Liquidity Depth: {}", liquidity);
+            }
+            
+            if let Some(reserve_info) = &enhanced_quote.reserve_info {
+                println!("   Reserves: {} / {}", reserve_info.reserve0_formatted, reserve_info.reserve1_formatted);
+                println!("   Pair: {}", reserve_info.pair_address);
+            }
+            
+            println!("   Execution Time: {}ms", enhanced_quote.execution_time_ms);
         }
         Err(e) => {
-            println!("❌ Price impact calculation failed: {:?}", e);
-            println!("ℹ️  Using mock reserves for demonstration");
+            println!("❌ Enhanced quote failed: {:?}", e);
         }
     }
     println!();

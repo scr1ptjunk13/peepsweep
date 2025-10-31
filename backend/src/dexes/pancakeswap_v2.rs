@@ -126,7 +126,8 @@ impl DexIntegration for PancakeSwapV2Dex {
             dex: self.get_name().to_string(),
             percentage: 100.0,
             amount_out,
-            gas_used: "140000".to_string(), // Slightly lower than Uniswap V2 due to optimizations
+            gas_used: "160000".to_string(), // PancakeSwap V2 gas usage
+            confidence_score: 0.88, // Good confidence for PancakeSwap
         })
     }
 

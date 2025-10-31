@@ -118,7 +118,8 @@ impl DexIntegration for ApeSwapDex {
             dex: self.get_name().to_string(),
             percentage: 100.0,
             amount_out,
-            gas_used: "150000".to_string(), // Standard Uniswap V2 fork gas
+            gas_used: "150000".to_string(), // ApeSwap gas usage
+            confidence_score: 0.82, // Medium confidence for ApeSwap
         })
     }
 

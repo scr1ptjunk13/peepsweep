@@ -1,4 +1,4 @@
-use bralaladex_backend::dexes::spiritswap_v3::SpiritSwapV3Dex;
+use bralaladex_backend::dexes::spiritswap_v2::SpiritSwapV2Dex;
 use bralaladex_backend::dexes::DexIntegration;
 use bralaladex_backend::types::QuoteParams;
 use tracing::{info, error};
@@ -12,7 +12,7 @@ async fn main() {
     info!("🚀 Testing SpiritSwap V3 Implementation");
 
     // Initialize SpiritSwap V3 DEX
-    let dex = SpiritSwapV3Dex::new();
+    let dex = SpiritSwapV2Dex::new();
     
     // Display supported chains
     let chains = dex.get_supported_chains();

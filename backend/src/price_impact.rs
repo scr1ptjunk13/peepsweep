@@ -126,26 +126,12 @@ impl PriceImpactCalculator {
         let reserve1_bytes = &result[50..64]; // Last 14 bytes of second 32-byte word
         let timestamp_bytes = &result[92..96]; // Last 4 bytes of third word
         
-        // Debug: Print raw bytes
-        println!("🔍 RAW RESPONSE DEBUG:");
-        println!("   Total length: {} bytes", result.len());
-        println!("   Raw hex: 0x{}", hex::encode(&result));
-        println!("   Reserve0 bytes: {:?}", reserve0_bytes);
-        println!("   Reserve1 bytes: {:?}", reserve1_bytes);
-        
         let reserve0 = U256::from_be_slice(reserve0_bytes);
         let reserve1 = U256::from_be_slice(reserve1_bytes);
         let timestamp = u32::from_be_bytes([
             timestamp_bytes[0], timestamp_bytes[1], 
             timestamp_bytes[2], timestamp_bytes[3]
         ]);
-        
-        // Debug: Print the reserves we got
-        println!("🔍 REAL RESERVES FETCHED:");
-        println!("   Pair Address: {:?}", pair_address);
-        println!("   Reserve0: {} ({})", reserve0, Self::u256_to_f64(reserve0).unwrap_or(0.0));
-        println!("   Reserve1: {} ({})", reserve1, Self::u256_to_f64(reserve1).unwrap_or(0.0));
-        println!("   Timestamp: {}", timestamp);
         
         Ok((reserve0, reserve1, timestamp))
     }

@@ -1,7 +1,7 @@
 use crate::dexes::{DexIntegration, DexError};
 use crate::types::{QuoteParams, RouteBreakdown, SwapParams};
 use crate::dexes::utils::{
-    dex_template::{DexConfig, ChainConfig, RouterMethod, DexConfigBuilder},
+    dex_template::{DexConfig, ChainConfig, DexConfigBuilder},
     DexUtils, ProviderCache
 };
 use async_trait::async_trait;
@@ -166,7 +166,8 @@ impl DexIntegration for UniswapV3Dex {
             dex: self.get_name().to_string(),
             percentage: 100.0,
             amount_out,
-            gas_used: "180000".to_string(),
+            gas_used: "200000".to_string(), // V3 can be more gas intensive due to complexity
+            confidence_score: 0.90, // High confidence for Uniswap V3
         })
     }
 

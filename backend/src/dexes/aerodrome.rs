@@ -175,7 +175,8 @@ impl DexIntegration for AerodromeDex {
             dex: self.get_name().to_string(),
             percentage: 100.0,
             amount_out,
-            gas_used: "150000".to_string(), // Base optimized gas
+            gas_used: "170000".to_string(), // Aerodrome gas usage
+            confidence_score: 0.87, // Good confidence for Aerodrome
         })
     }
 

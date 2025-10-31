@@ -120,7 +120,8 @@ impl DexIntegration for SpiritSwapV2Dex {
             dex: self.get_name().to_string(),
             percentage: 100.0,
             amount_out,
-            gas_used: "135000".to_string(), // Slightly lower than Uniswap V2 due to Fantom optimizations
+            gas_used: "155000".to_string(), // SpiritSwap V2 gas usage
+            confidence_score: 0.85, // Medium confidence for SpiritSwap
         })
     }
 

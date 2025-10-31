@@ -150,7 +150,8 @@ impl DexIntegration for SushiSwapV2Dex {
             dex: self.get_name().to_string(),
             percentage: 100.0,
             amount_out,
-            gas_used: "150000".to_string(), // V2 is more gas efficient than V3
+            gas_used: "180000".to_string(), // SushiSwap typically uses more gas
+            confidence_score: 0.92, // High confidence for SushiSwap
         })
     }
 

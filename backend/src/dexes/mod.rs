@@ -83,12 +83,12 @@ pub trait DexIntegration: Send + Sync {
     
     /// NEW: Build transaction for gas estimation (optional implementation)
     /// Returns a TransactionRequest that can be used with eth_estimateGas
-    async fn build_transaction(&self, params: &QuoteParams) -> Result<alloy::rpc::types::TransactionRequest, DexError> {
+    async fn build_transaction(&self, _params: &QuoteParams) -> Result<alloy::rpc::types::TransactionRequest, DexError> {
         // Default implementation: not supported
         Err(DexError::NotImplemented(format!("{} does not support transaction building yet", self.get_name())))
     }
     
-    async fn is_pair_supported(&self, token_in: &str, token_out: &str, chain: &str) -> Result<bool, DexError> {
+    async fn is_pair_supported(&self, _token_in: &str, _token_out: &str, _chain: &str) -> Result<bool, DexError> {
         // Default implementation - can be overridden by specific DEXes
         Ok(true)
     }

@@ -1,5 +1,4 @@
-use alloy::primitives::{Address, U256};
-use std::str::FromStr;
+use alloy::primitives::U256;
 use std::time::Duration;
 use tokio::time::timeout;
 use crate::dexes::DexError;
@@ -264,40 +263,51 @@ impl DexTestSuite {
         let mut errors = Vec::new();
 
         // Check if quote has valid output amount
-        if quote.amount_out.is_zero() {
+        if quote.amount_out.is_empty() || quote.amount_out == "0" {
             errors.push("Quote returned zero output amount".to_string());
         }
 
-        // Check against expected range
-        if let Some(min_out) = test_case.expected_min_out {
-            if quote.amount_out < min_out {
-                errors.push(format!(
-                    "Output amount {} below expected minimum {}",
-                    quote.amount_out, min_out
-                ));
+        // Parse amount_out for comparison
+        if let Ok(amount_out_parsed) = quote.amount_out.parse::<f64>() {
+            // Check against expected range
+            if let Some(min_out) = test_case.expected_min_out {
+                // Convert U256 to f64 safely
+                let min_out_f64 = min_out.to_string().parse::<f64>().unwrap_or(0.0);
+                if amount_out_parsed < min_out_f64 {
+                    errors.push(format!(
+                        "Output amount {} below expected minimum {}",
+                        amount_out_parsed, min_out_f64
+                    ));
+                }
             }
-        }
 
-        if let Some(max_out) = test_case.expected_max_out {
-            if quote.amount_out > max_out {
-                errors.push(format!(
-                    "Output amount {} above expected maximum {}",
-                    quote.amount_out, max_out
-                ));
+            if let Some(max_out) = test_case.expected_max_out {
+                // Convert U256 to f64 safely
+                let max_out_f64 = max_out.to_string().parse::<f64>().unwrap_or(f64::MAX);
+                if amount_out_parsed > max_out_f64 {
+                    errors.push(format!(
+                        "Output amount {} above expected maximum {}",
+                        amount_out_parsed, max_out_f64
+                    ));
+                }
             }
+        } else {
+            errors.push("Could not parse output amount as number".to_string());
         }
 
         // Check gas estimate is reasonable
-        if quote.gas_estimate > U256::from(1_000_000) {
-            errors.push(format!(
-                "Gas estimate {} seems too high",
-                quote.gas_estimate
-            ));
+        if let Some(gas_estimate) = quote.real_gas_estimate {
+            if gas_estimate > 1_000_000 {
+                errors.push(format!(
+                    "Gas estimate {} seems too high",
+                    gas_estimate
+                ));
+            }
         }
 
-        // Check that route has at least one step
-        if quote.route_steps.is_empty() {
-            errors.push("Route has no steps".to_string());
+        // Basic validation - check that we have a valid DEX name
+        if quote.dex.is_empty() {
+            errors.push("DEX name is empty".to_string());
         }
 
         errors

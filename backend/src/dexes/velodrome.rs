@@ -6,12 +6,10 @@ use crate::dexes::utils::{
 };
 use async_trait::async_trait;
 use alloy::{
-    primitives::{Address, U256, Bytes},
-    providers::Provider,
+    primitives::{Address, U256},
     sol,
 };
 use std::str::FromStr;
-use serde_json;
 
 // Velodrome V2 ABI - Using Universal DEX Framework
 sol! {
@@ -291,7 +289,8 @@ impl DexIntegration for VelodromeDex {
             dex: self.get_name().to_string(),
             percentage: 100.0,
             amount_out,
-            gas_used: self.config.gas_estimate.to_string(),
+            gas_used: "165000".to_string(), // Velodrome gas usage
+            confidence_score: 0.86, // Good confidence for Velodrome
         })
     }
 
@@ -308,7 +307,7 @@ impl DexIntegration for VelodromeDex {
         Ok(true)
     }
 
-    async fn execute_swap(&self, params: &SwapParams) -> Result<String, DexError> {
+    async fn execute_swap(&self, _params: &SwapParams) -> Result<String, DexError> {
         // For now, return a placeholder transaction hash
         // In production, this would interact with the Velodrome router contract
         Err(DexError::NotImplemented("Swap execution not yet implemented for Velodrome".to_string()))

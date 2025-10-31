@@ -139,7 +139,7 @@ impl ProviderCache {
                     self.update_health_success(chain, rpc_url);
                     return Ok(provider);
                 }
-                Err(e) => {
+                Err(_e) => {
                     self.update_health_failure(chain, rpc_url);
                     
                     // If not the last endpoint, wait before trying next

@@ -1,6 +1,4 @@
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use std::collections::HashMap;
 use rust_decimal::Decimal;
 use uuid::Uuid;
 
@@ -39,19 +37,40 @@ impl Chain {
             "base" => Some(Chain::Base),
             "avalanche" | "avax" => Some(Chain::Avalanche),
             "bnb" | "bsc" => Some(Chain::BNB),
-            "fantom" | "ftm" => Some(Chain::Fantom),
             _ => None,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DexQuote {
-    pub dex_name: String,
-    pub output_amount: String,
-    pub gas_estimate: u64,
-    pub slippage: f64,
-    pub price_impact: f64,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EnhancedRouteBreakdown {
+    pub dex: String,
+    pub amount_out: String,
+    pub gas_used: String,
+    pub execution_time_ms: u64,
+    pub confidence_score: f64,
+    
+    // NEW: Enhanced data
+    pub price_impact: Option<f64>,           // Real price impact %
+    pub price_impact_category: Option<String>, // "low", "Medium", "High", etc.
+    pub real_gas_estimate: Option<u64>,      // Actual blockchain gas estimate
+    pub gas_cost_usd: Option<f64>,           // Gas cost in USD
+    pub gas_savings_vs_hardcoded: Option<f64>, // % savings vs hardcoded
+    pub liquidity_depth: Option<String>,     // "High", "Medium", "low"
+    pub recommended_slippage: Option<f64>,   // Recommended slippage %
+    pub trade_recommendation: Option<String>, // "Execute", "Split", "Avoid"
+    pub reserve_info: Option<ReserveInfo>,   // Reserve details
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ReserveInfo {
+    pub reserve0: String,
+    pub reserve1: String,
+    pub reserve0_formatted: String,  // Human readable (e.g., "24.5M USDC")
+    pub reserve1_formatted: String,  // Human readable (e.g., "6,468 ETH")
+    pub total_liquidity_usd: Option<f64>,
+    pub pair_address: String,
+    pub last_updated: u32,  // timestamp
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,6 +154,7 @@ pub struct RouteBreakdown {
     pub amount_out: String,
     #[serde(rename = "gasUsed")]
     pub gas_used: String,
+    pub confidence_score: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -256,12 +276,12 @@ pub struct RouteStep {
     pub pool_address: Option<alloy::primitives::Address>,
 }
 
-/// Enhanced RouteBreakdown for DEX framework compatibility
+// DexQuote struct for TUI display
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EnhancedRouteBreakdown {
+pub struct DexQuote {
     pub dex_name: String,
-    pub amount_in: alloy::primitives::U256,
-    pub amount_out: alloy::primitives::U256,
-    pub gas_estimate: alloy::primitives::U256,
-    pub route_steps: Vec<RouteStep>,
+    pub output_amount: String,
+    pub gas_estimate: u64,
+    pub slippage: f64,
+    pub price_impact: f64,
 }

@@ -1,6 +1,6 @@
 use bralaladex_backend::dexes::sushiswap::SushiSwapV2Dex;
 use bralaladex_backend::dexes::DexIntegration;
-use bralaladex_backend::types::{QuoteParams, SwapParams};
+use bralaladex_backend::types::QuoteParams;
 use tracing::{error, info};
 
 #[tokio::main]
