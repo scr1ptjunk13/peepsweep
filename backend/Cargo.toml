@@ -64,6 +64,18 @@ uuid = { version = "1.0", features = ["v4", "serde"] }  # UUID support
 once_cell = "1.19"  # Lazy static initialization
 redis = { version = "0.23", features = ["aio", "tokio-comp"] }  # Redis client
 
+# Token database dependencies
+phf = { version = "0.11", features = ["macros"] }  # Perfect hash functions
+rustc-hash = "1.1"  # FxHashMap for fast string lookups
+image = "0.24"  # For token logo processing
+ratatui-image = "1.0"  # For displaying logos in TUI
+
+[build-dependencies]
+phf_codegen = "0.11"  # For generating PHF maps at build time
+reqwest = { version = "0.11", features = ["json", "blocking"] }  # For downloading token lists
+serde_json = "1.0"  # JSON parsing for token lists
+anyhow = "1.0"  # Error handling in build script
+
 [dev-dependencies]
 axum-test = "15.0"
 tempfile = "3.0"  # Temporary file creation for tests
